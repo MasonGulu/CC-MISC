@@ -1,0 +1,4 @@
+std = "cc-tweaked"
+
+[lints]
+incorrect_standard_library_use = "allow" # Workaround for https://github.com/Kampfkarren/selene/issues/467

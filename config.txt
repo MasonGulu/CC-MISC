@@ -1,0 +1,41 @@
+{
+  inventory = {
+    inventories = {
+      value = {
+        "left",
+        "right",
+      },
+      type = "table",
+      description = "List of storage peripherals to use for the main storage",
+    },
+    flushTimer = {
+      value = 3,
+      type = "number",
+      description = "Time to wait after a transfer is queued before performing the transfers",
+      default = 3,
+    },
+    flushLimit = {
+      value = 10,
+      type = "number",
+      description = "Immediately flush the transfer queue when this many transfers are in it",
+      default = 10,
+    },
+  },
+  gui = {
+    test3 = {
+      value = "???",
+      type = "string",
+      default = "???",
+    },
+    test1 = {
+      value = "???",
+      type = "string",
+      default = "???",
+    },
+    test2 = {
+      value = "???",
+      type = "string",
+      default = "???",
+    },
+  },
+}

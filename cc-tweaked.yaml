@@ -1,0 +1,60 @@
+---
+base: lua52
+
+globals:
+  package.cpath:
+    removed: true
+  collectgarbage:
+    removed: true
+  _HOST:
+    property: read-only
+  colors:
+    property: read-only
+  colours:
+    property: read-only
+  commands:
+    property: read-only
+  disk:
+    property: read-only
+  fs:
+    property: read-only
+  gps:
+    property: read-only
+  help:
+    property: read-only
+  http:
+    property: read-only
+  io:
+    property: read-only
+  keys:
+    property: read-only
+  multishell:
+    property: read-only
+  os:
+    property: read-only
+  paintutils:
+    property: read-only
+  parallel:
+    property: read-only
+  peripheral:
+    property: read-only
+  pocket:
+    property: read-only
+  rednet:
+    property: read-only
+  redstone:
+    property: read-only
+  settings:
+    property: read-only
+  shell:
+    property: read-only
+  term:
+    property: read-only
+  textutils:
+    property: read-only
+  turtle:
+    property: read-only
+  vector:
+    property: read-only
+  window:
+    property: read-only
