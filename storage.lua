@@ -3,8 +3,11 @@ local printf = common.printf
 
 ---@type table array of module filenames to load
 local modules = {
+  "modules.debug",
   "modules.inventory",
-  "modules.gui",
+  "modules.crafting",
+  "modules.rednet",
+  -- "modules.gui",
 }
 
 -- A module should return a table that contains at least the following fields
@@ -17,14 +20,6 @@ local modules = {
 ---@field default any
 ---@field type string
 
-local function interface__index(id)
-  return function(t,k)
-    if k == "interface" then
-      error(("Attempt to get interface of %s before it was initialized"):format(id, id), 2)
-    end
-  end
-end
-
 ---@type table loaded config information
 local config = {}
 ---@type table array of module IDs in init order
@@ -36,7 +31,7 @@ end})
 for _,v in ipairs(modules) do
   ---@type module
   local mod = require(v)
-  loaded[mod.id] = setmetatable(mod, {__index=interface__index(mod.id)})
+  loaded[mod.id] = mod
   config[mod.id] = mod.config
   table.insert(moduleInitOrder, mod.id)
   printf("Loaded %s v%s", mod.id, mod.version)
@@ -53,13 +48,41 @@ local function protectedIndex(t, ...)
   return curIndex
 end
 
+local function getValue(type)
+  while true do
+    term.write("Please input a "..type..": ")
+    local input = io.read()
+    if type == "table" then
+      local val = textutils.unserialise(input)
+      if val then
+        return val
+      end
+    elseif type == "number" then
+      local val = tonumber(input)
+      if val then
+        return val
+      end
+    elseif type == "string" then
+      if input ~= "" then
+        return input
+      end
+    else
+      error(("Invalid type %s"):format(type))
+    end
+  end
+end
+
 local loadedConfig = common.loadTableFromFile("config.txt") or {}
 local badOptions = {}
 for id, spec in pairs(config) do
   for name, info in pairs(spec) do
     config[id][name].value = protectedIndex(loadedConfig, id, name, "value") or config[id][name].default
+    config[id][name].id = id
+    config[id][name].name = name
     if type(config[id][name].value) ~= info.type then
-      table.insert(badOptions, ("Config option %s.%s is not type %s"):format(id, name, info.type))
+      print(("Config option %s.%s is invalid"):format(id, name, info.type))
+      print(config[id][name].description)
+      config[id][name].value = getValue(config[id][name].type)
     end
   end
 end
@@ -69,14 +92,33 @@ local function saveConfig()
 end
 saveConfig()
 
-setmetatable(config, {__call=saveConfig})
-
-if #badOptions > 0 then
-  for k,v in pairs(badOptions) do
-    print(v)
-  end
-  return
-end
+loaded.config = {
+  interface = {
+    save = saveConfig,
+    ---Attempt to the given setting to the given value
+    ---@param setting table
+    ---@param value any
+    ---@return boolean success
+    set = function(setting, value)
+      if type(value) == setting.type then
+        setting.value = value
+        return true
+      end
+      if setting.type == "number" and tonumber(value) then
+        setting.value = tonumber(value)
+        return true
+      end
+      if setting.type == "table" and value then
+        local val = textutils.unserialise(value)
+        if val then
+          setting.value = val
+          return true
+        end
+      end
+      return false
+    end
+  }
+}
 
 
 ---@type table array of functions to run all the modules

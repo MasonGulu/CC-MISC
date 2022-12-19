@@ -1,41 +1,66 @@
 {
   inventory = {
+    flushTimer = {
+      type = "number",
+      default = 3,
+      value = 3,
+      name = "flushTimer",
+      id = "inventory",
+      description = "Time to wait after a transfer is queued before performing the transfers",
+    },
     inventories = {
-      value = {
-        "left",
-        "right",
-      },
       type = "table",
       description = "List of storage peripherals to use for the main storage",
+      id = "inventory",
+      name = "inventories",
+      value = {
+        "minecraft:chest_4",
+        "minecraft:chest_5",
+        "minecraft:chest_6",
+      },
     },
-    flushTimer = {
-      value = 3,
+    cacheTimer = {
       type = "number",
-      description = "Time to wait after a transfer is queued before performing the transfers",
-      default = 3,
+      default = 10,
+      value = 10,
+      name = "cacheTimer",
+      id = "inventory",
+      description = "Sync the transfer cache to disk every n seconds.",
     },
     flushLimit = {
-      value = 10,
       type = "number",
-      description = "Immediately flush the transfer queue when this many transfers are in it",
       default = 10,
+      value = 10,
+      name = "flushLimit",
+      id = "inventory",
+      description = "Immediately flush the transfer queue when this many transfers are in it",
     },
   },
-  gui = {
-    test3 = {
-      value = "???",
-      type = "string",
-      default = "???",
+  rednet = {},
+  debug = {},
+  crafting = {
+    port = {
+      type = "number",
+      default = 121,
+      value = 121,
+      name = "port",
+      id = "crafting",
+      description = "Port to host crafting turtles on.",
     },
-    test1 = {
-      value = "???",
-      type = "string",
-      default = "???",
+    keep_alive = {
+      type = "number",
+      default = 8,
+      value = 8,
+      name = "keep_alive",
+      id = "crafting",
+      description = "Keep alive ping frequency",
     },
-    test2 = {
-      value = "???",
+    modem = {
       type = "string",
-      default = "???",
+      description = "Modem to host crafting turtles on. This needs to be the same one the turtles AND inventory are on.",
+      id = "crafting",
+      name = "modem",
+      value = "top",
     },
   },
 }

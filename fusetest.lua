@@ -1,8 +1,5 @@
-periphemu.create("left", "minecraft:chest")
-local c = peripheral.wrap("left")
+periphemu.create("minecraft:chest_4", "minecraft:chest")
+local c = peripheral.wrap("minecraft:chest_4")
 c.setItem(1, {name="minecraft:stone", count=10})
-periphemu.create("right", "minecraft:chest")
-local c2 = peripheral.wrap("right")
-
--- fs.mountInventory("left", {"left"})
--- fs.mountInventory("right", {"right"})
+periphemu.create("minecraft:chest_5", "minecraft:chest")
+periphemu.create("minecraft:chest_6", "minecraft:chest")

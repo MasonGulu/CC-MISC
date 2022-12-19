@@ -15,17 +15,20 @@ config = {
     type = "number",
     description = "Immediately flush the transfer queue when this many transfers are in it",
     default = 10,
+  },
+  cacheTimer = {
+    type = "number",
+    description = "Sync the transfer cache to disk every n seconds.",
+    default = 10,
   }
 },
 init = function(loaded, config)
   local storage = require("abstractInvLib")(config.inventory.inventories.value)
-  storage.refreshStorage()
+  storage.refreshStorage(true)
   local transferQueue = require("common").loadTableFromFile(".cache/transferQueue") or {}
   local transferTimer
-
-  local function eventName(id)
-    return "inventoryFinished"..tostring(id)
-  end
+  local cacheTimer = os.startTimer(config.inventory.cacheTimer.value)
+  local transferQueueDiffers = false
 
   local function performTransfer()
     if transferTimer then
@@ -48,10 +51,10 @@ init = function(loaded, config)
         local transfer = v
         table.insert(transferExecution, function ()
           local retVal = {pcall(function() return storage[transfer[2]](table.unpack(transfer,3)) end)}
-          os.queueEvent(eventName(transfer[1]), table.unpack(retVal, 2))
+          os.queueEvent("inventoryFinished", transfer[1], table.unpack(retVal, 2))
         end)
       end
-      require("common").saveTableToFile(".cache/transferQueue", transferQueue)
+      transferQueueDiffers = true
       parallel.waitForAll(table.unpack(transferExecution))
     end
   end
@@ -60,20 +63,25 @@ init = function(loaded, config)
     while true do
       local e, id = os.pullEvent("timer")
       if id == transferTimer then
-        print("Transfer timer!")
         performTransfer()
+      elseif id == cacheTimer then
+        if transferQueueDiffers then
+          transferQueueDiffers = false
+          require("common").saveTableToFile(".cache/transferQueue", transferQueue)  
+        end
+        cacheTimer = os.startTimer(config.inventory.cacheTimer.value)
       end
     end
   end
 
   local function addToQueue(...)
     table.insert(transferQueue, {...})
-    require("common").saveTableToFile(".cache/transferQueue", transferQueue)
-    if (#transferQueue > config.inventory.flushLimit) then
+    if (#transferQueue > config.inventory.flushLimit.value) then
       performTransfer()
     elseif not transferTimer then
-      transferTimer = os.startTimer(config.inventory.flushTimer)
+      transferTimer = os.startTimer(config.inventory.flushTimer.value)
     end
+    transferQueueDiffers = true
   end
 
   local function getID()
@@ -120,11 +128,6 @@ init = function(loaded, config)
 
   return {
     start = function() parallel.waitForAny(queueHandler, timerHandler) end,
-    test = function(...)
-      local id = math.random()
-      addToQueue(id, ...)
-      return table.unpack({os.pullEvent(eventName(id))}, 2)
-    end,
     pushItems = pushItems,
     pullItems = pullItems,
     getCount = storage.getCount,
@@ -134,6 +137,21 @@ init = function(loaded, config)
     size = storage.size,
     freeSpace = storage.freeSpace,
     listItems = storage.listItems,
+    listItemAmounts = storage.listItemAmounts,
+    gui = function(frame)
+      frame:addLabel():setPosition(2,2):setText("Transfer Queue Length:")
+      local queueSizeLabel = frame:addLabel():setPosition(2,3):setFontSize(3)
+      frame:addButton():setPosition(2,11):setSize("parent.w-2",3):setText("Flush Queue"):onClick(performTransfer)
+      frame:addButton():setPosition(2,15):setSize("parent.w-2",3):setText("Clear Queue"):onClick(function()
+        transferQueue = {}
+     end)
+      frame:addThread():start(function()
+        while true do
+          os.pullEvent()
+          queueSizeLabel:setText(#transferQueue)
+        end
+      end)
+    end
   }
 end,
 }
