@@ -50,8 +50,10 @@ init = function(loaded, config)
       for _,v in pairs(transferQueueCopy) do
         local transfer = v
         table.insert(transferExecution, function ()
-          local retVal = {pcall(function() return storage[transfer[2]](table.unpack(transfer,3)) end)}
-          print("DID TRANSFER: ", table.unpack(retVal))
+          local retVal = {pcall(function() return storage[transfer[2]](table.unpack(transfer,3,transfer.n)) end)}
+          if not retVal[1] then
+            error(retVal[2])
+          end
           os.queueEvent("inventoryFinished", transfer[1], table.unpack(retVal, 2))
         end)
       end
@@ -68,7 +70,7 @@ init = function(loaded, config)
       elseif id == cacheTimer then
         if transferQueueDiffers then
           transferQueueDiffers = false
-          require("common").saveTableToFile(".cache/transferQueue", transferQueue)  
+          require("common").saveTableToFile(".cache/transferQueue", transferQueue)
         end
         cacheTimer = os.startTimer(config.inventory.cacheTimer.value)
       end
@@ -76,7 +78,7 @@ init = function(loaded, config)
   end
 
   local function addToQueue(...)
-    table.insert(transferQueue, {...})
+    table.insert(transferQueue, table.pack(...))
     if (#transferQueue > config.inventory.flushLimit.value) then
       performTransfer()
     elseif not transferTimer then
