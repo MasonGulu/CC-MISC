@@ -1,10 +1,10 @@
-local function saveTableToFile(file, table, compact)
+local function saveTableToFile(file, table, compact, repetitions)
   if type(compact) == "nil" then compact = true end
   local f = fs.open(file, "w")
   if not f then
     return false
   end
-  f.write(textutils.serialise(table, {compact=compact}))
+  f.write(textutils.serialise(table, {compact=compact, allow_repetitions = repetitions}))
   f.close()
   return true
 end

@@ -1,0 +1,114 @@
+{
+  type = "ROOT",
+  job_id = "1296000002986P",
+  children = {
+    {
+      plan = {
+        {
+          max = 64,
+          name = "minecraft:gold_ingot",
+          count = 2,
+        },
+        [ 3 ] = {
+          max = 64,
+          name = "minecraft:gold_ingot",
+          count = 2,
+        },
+        [ 4 ] = {
+          max = 64,
+          name = "minecraft:gold_ingot",
+          count = 2,
+        },
+        [ 5 ] = {
+          max = 64,
+          name = "minecraft:stick",
+          count = 2,
+        },
+        [ 6 ] = {
+          max = 64,
+          name = "minecraft:gold_ingot",
+          count = 2,
+        },
+        [ 7 ] = {
+          max = 64,
+          name = "minecraft:gold_ingot",
+          count = 2,
+        },
+        [ 8 ] = {
+          max = 64,
+          name = "minecraft:redstone",
+          count = 2,
+        },
+        [ 9 ] = {
+          max = 64,
+          name = "minecraft:gold_ingot",
+          count = 2,
+        },
+      },
+      type = "CG",
+      name = "minecraft:powered_rail",
+      count = 12,
+      children = {
+        {
+          type = "ITEM",
+          name = "minecraft:gold_ingot",
+          count = 2,
+          task_id = "1296000009933R",
+          job_id = "1296000002986P",
+        },
+        {
+          type = "ITEM",
+          name = "minecraft:gold_ingot",
+          count = 2,
+          task_id = "1296000001896E",
+          job_id = "1296000002986P",
+        },
+        {
+          type = "ITEM",
+          name = "minecraft:gold_ingot",
+          count = 2,
+          task_id = "1296000006122E",
+          job_id = "1296000002986P",
+        },
+        {
+          type = "ITEM",
+          name = "minecraft:stick",
+          count = 2,
+          task_id = "1296000004417C",
+          job_id = "1296000002986P",
+        },
+        {
+          type = "ITEM",
+          name = "minecraft:gold_ingot",
+          count = 2,
+          task_id = "1296000004649F",
+          job_id = "1296000002986P",
+        },
+        {
+          type = "ITEM",
+          name = "minecraft:gold_ingot",
+          count = 2,
+          task_id = "1296000004717H",
+          job_id = "1296000002986P",
+        },
+        {
+          type = "ITEM",
+          name = "minecraft:redstone",
+          count = 2,
+          task_id = "1296000008063G",
+          job_id = "1296000002986P",
+        },
+        {
+          type = "ITEM",
+          name = "minecraft:gold_ingot",
+          count = 2,
+          task_id = "1296000003542E",
+          job_id = "1296000002986P",
+        },
+      },
+      to_craft = 2,
+      task_id = "1296000005774P",
+      job_id = "1296000002986P",
+    },
+  },
+}

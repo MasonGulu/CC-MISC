@@ -52,6 +52,24 @@ local function get_modem_message(filter, timeout)
     end
   end
 end
+local function write_banner()
+  local x, y = term.getCursorPos()
+
+  banner.setBackgroundColor(colors.gray)
+  banner.setCursorPos(1,1)
+  banner.clear()
+  if connected then
+    banner.setTextColor(colors.green)
+    banner.write("CONNECTED")
+  else
+    banner.setTextColor(colors.red)
+    banner.write("DISCONNECTED")
+  end
+  banner.setTextColor(colors.white)
+  banner.setCursorPos(w-state:len(),1)
+  banner.write(state)
+  term.setCursorPos(x,y)
+end
 local function keep_alive()
   while true do
     local modem_message = get_modem_message(function(message)
@@ -66,20 +84,7 @@ local function keep_alive()
         destination = "HOST",
       })
     end
-    local x, y = term.getCursorPos()
-
-    banner.setBackgroundColor(colors.gray)
-    banner.setCursorPos(1,1)
-    banner.clear()
-    if connected then
-      banner.setTextColor(colors.green)
-      banner.write("CONNECTED")
-    else
-      banner.setTextColor(colors.red)
-      banner.write("DISCONNECTED")
-    end
-    term.setCursorPos(x,y)
-    sleep(3)
+    write_banner()
   end
 end
 local function col_write(fg, text)
@@ -92,11 +97,20 @@ local interface_lut
 interface_lut = {
   help = function()
     local maxw = 0
+    local command_list = {}
     for k,v in pairs(interface_lut) do
-      maxw = math.max(maxw, k:len())
+      maxw = math.max(maxw, k:len()+1)
+      table.insert(command_list, k)
     end
     local element_w = math.floor(w / maxw)
-    local format_str = "%s"
+    local format_str = "%"..maxw.."s"
+    for i,v in ipairs(command_list) do
+      term.write(format_str:format(v))
+      if (i + 1) % element_w == 0 then
+        print()
+      end
+    end
+    print()
   end,
   clear = function()
     term.clear()
@@ -106,7 +120,7 @@ interface_lut = {
 local function interface()
   print("Crafting turtle indev")
   while true do
-    col_write(colors.cyan, "crft] ")
+    col_write(colors.cyan, "] ")
     local input = io.read()
     if interface_lut[input] then
       interface_lut[input]()
@@ -117,4 +131,5 @@ local function interface()
   end
 end
 
+write_banner()
 parallel.waitForAny(interface, keep_alive)

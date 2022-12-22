@@ -22,7 +22,7 @@
     cacheTimer = {
       type = "number",
       default = 10,
-      value = 10,
+      value = 1,
       name = "cacheTimer",
       id = "inventory",
       description = "Sync the transfer cache to disk every n seconds.",
@@ -36,8 +36,30 @@
       description = "Immediately flush the transfer queue when this many transfers are in it",
     },
   },
-  rednet = {},
-  debug = {},
+  rednet = {
+    hostname = {
+      type = "string",
+      description = "Hostname to use for rednet services",
+      id = "rednet",
+      name = "hostname",
+      value = "test",
+    },
+    protocol = {
+      type = "string",
+      default = "STORAGE",
+      value = "STORAGE",
+      name = "protocol",
+      id = "rednet",
+      description = "Name of rednet protocol",
+    },
+    modem = {
+      type = "string",
+      description = "Modem to host rednet services over",
+      id = "rednet",
+      name = "modem",
+      value = "left",
+    },
+  },
   crafting = {
     port = {
       type = "number",
@@ -60,7 +82,7 @@
       description = "Modem to host crafting turtles on. This needs to be the same one the turtles AND inventory are on.",
       id = "crafting",
       name = "modem",
-      value = "top",
+      value = "left",
     },
   },
 }

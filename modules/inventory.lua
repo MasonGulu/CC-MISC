@@ -51,6 +51,7 @@ init = function(loaded, config)
         local transfer = v
         table.insert(transferExecution, function ()
           local retVal = {pcall(function() return storage[transfer[2]](table.unpack(transfer,3)) end)}
+          print("DID TRANSFER: ", table.unpack(retVal))
           os.queueEvent("inventoryFinished", transfer[1], table.unpack(retVal, 2))
         end)
       end
@@ -126,32 +127,30 @@ init = function(loaded, config)
     return storage.pullItems(fromInventory, fromSlot, amount, toSlot, nbt, options)
   end
 
-  return {
-    start = function() parallel.waitForAny(queueHandler, timerHandler) end,
-    pushItems = pushItems,
-    pullItems = pullItems,
-    getCount = storage.getCount,
-    listNames = storage.listNames,
-    listNBT = storage.listNBT,
-    list = storage.list,
-    size = storage.size,
-    freeSpace = storage.freeSpace,
-    listItems = storage.listItems,
-    listItemAmounts = storage.listItemAmounts,
-    gui = function(frame)
-      frame:addLabel():setPosition(2,2):setText("Transfer Queue Length:")
-      local queueSizeLabel = frame:addLabel():setPosition(2,3):setFontSize(3)
-      frame:addButton():setPosition(2,11):setSize("parent.w-2",3):setText("Flush Queue"):onClick(performTransfer)
-      frame:addButton():setPosition(2,15):setSize("parent.w-2",3):setText("Clear Queue"):onClick(function()
-        transferQueue = {}
-     end)
-      frame:addThread():start(function()
-        while true do
-          os.pullEvent()
-          queueSizeLabel:setText(#transferQueue)
-        end
-      end)
+  local module = {}
+  for k,v in pairs(storage) do
+    if k:sub(1,1) ~= "_" then
+      module[k] = v
     end
-  }
+  end
+  module.pushItems = pushItems
+  module.pullItems = pullItems
+  module.start = function() parallel.waitForAny(queueHandler, timerHandler) end
+  module.gui = function(frame)
+    frame:addLabel():setPosition(2,2):setText("Transfer Queue Length:")
+    local queueSizeLabel = frame:addLabel():setPosition(2,3):setFontSize(3)
+    frame:addButton():setPosition(2,11):setSize("parent.w-2",3):setText("Flush Queue"):onClick(performTransfer)
+    frame:addButton():setPosition(2,15):setSize("parent.w-2",3):setText("Clear Queue"):onClick(function()
+      transferQueue = {}
+    end)
+    frame:addThread():start(function()
+      while true do
+        os.pullEvent()
+        queueSizeLabel:setText(#transferQueue)
+      end
+    end)
+  end
+
+  return module
 end,
 }
