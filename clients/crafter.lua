@@ -118,6 +118,7 @@ local function change_state(new_state)
     source = network_name,
     destination = "HOST",
   })
+  write_banner()
 end
 
 local function try_to_craft()
@@ -216,6 +217,17 @@ interface_lut = {
   end,
   info = function()
     print(("Local network name: %s"):format(network_name))
+  end,
+  cinfo = function()
+    if state == STATES.CRAFTING then
+      print("Current recipe is:")
+      print(textutils.serialise(task.plan))
+    else
+      print("Not crafting.")
+    end
+  end,
+  reboot = function ()
+    os.reboot()
   end
 }
 local function interface()

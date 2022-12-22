@@ -692,6 +692,7 @@ init = function(loaded, config)
           local turtle_slot = y * 4 + x
           loaded.inventory.interface.pushItems(true, available_turtle.name, v.name, v.count, turtle_slot, nil, {optimal=false})
         end
+        available_turtle.state = "BUSY"
       end
     end
   }
@@ -779,7 +780,8 @@ init = function(loaded, config)
         end
       end
     end
-    require "common".saveTableToFile("flat_task_lookup.txt", flat_task_lookup)
+    -- TODO figure out why this doesn't work
+    -- require "common".saveTableToFile("flat_task_lookup.txt", flat_task_lookup)
   end
 
   local function load_task_lookup()
@@ -856,7 +858,7 @@ init = function(loaded, config)
   local function request_craft(name, count)
     local job_id = id()
     job_lookup[job_id] = {}
-    local ok, job = pcall(_request_craft, name, count, job_id)
+    local ok, job = pcall(_request_craft, name, count, job_id, true)
 
     if not ok then
       error(job) -- TODO
