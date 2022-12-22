@@ -556,6 +556,7 @@ init = function(loaded, config)
       node.children = {}
       for k,v in pairs(plan) do
         v.count = to_craft
+        print(k,v.name,"plan?")
         merge_into(_request_craft(v.name, v.count, job_id), node.children)
       end
       for k,v in pairs(node.children) do
@@ -588,14 +589,18 @@ init = function(loaded, config)
       local available = get_count(name)
       if available > 0 and not force then
         -- we do, so allocate it
+        print("allocating", available)
         local allocate_amount = allocate_items(name, math.min(available, remaining))
         node.type = "ITEM"
         node.count = allocate_amount
         remaining = remaining - allocate_amount
       else
+        print("crafting?")
         local success = false
         for k,v in pairs(_request_craft_types) do
+          print("iterating")
           success = v(node, name, job_id, remaining)
+          print(success)
           if success then
             break
           end
@@ -774,7 +779,7 @@ init = function(loaded, config)
         end
       end
     end
-    -- require "common".saveTableToFile("flat_task_lookup.txt", flat_task_lookup)
+    require "common".saveTableToFile("flat_task_lookup.txt", flat_task_lookup)
   end
 
   local function load_task_lookup()
@@ -851,7 +856,7 @@ init = function(loaded, config)
   local function request_craft(name, count)
     local job_id = id()
     job_lookup[job_id] = {}
-    local ok, job = pcall(_request_craft, name, count, job_id, true)
+    local ok, job = pcall(_request_craft, name, count, job_id)
 
     if not ok then
       error(job) -- TODO
