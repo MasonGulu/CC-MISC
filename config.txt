@@ -1,5 +1,13 @@
 {
   inventory = {
+    defragOnStart = {
+      type = "boolean",
+      default = true,
+      value = true,
+      name = "defragOnStart",
+      id = "inventory",
+      description = "'Defragment' the chests on storage system start",
+    },
     flushTimer = {
       type = "number",
       default = 3,

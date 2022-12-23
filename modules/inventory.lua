@@ -20,6 +20,11 @@ config = {
     type = "number",
     description = "Sync the transfer cache to disk every n seconds.",
     default = 10,
+  },
+  defragOnStart = {
+    type = "boolean",
+    description = "'Defragment' the chests on storage system start",
+    default = true
   }
 },
 init = function(loaded, config)
@@ -58,7 +63,11 @@ init = function(loaded, config)
         end)
       end
       transferQueueDiffers = true
-      parallel.waitForAll(table.unpack(transferExecution))
+      -- parallel.waitForAll(table.unpack(transferExecution))
+      for _,f in pairs(transferExecution) do
+        f()
+      end
+      storage.defrag()
     end
   end
 
@@ -128,6 +137,10 @@ init = function(loaded, config)
     end
     return storage.pullItems(fromInventory, fromSlot, amount, toSlot, nbt, options)
   end
+  if config.inventory.defragOnStart.value then
+    print("Defragmenting...")
+    storage.defrag()
+  end
 
   local module = {}
   for k,v in pairs(storage) do
@@ -137,7 +150,9 @@ init = function(loaded, config)
   end
   module.pushItems = pushItems
   module.pullItems = pullItems
-  module.start = function() parallel.waitForAny(queueHandler, timerHandler) end
+  module.start = function()
+    parallel.waitForAny(queueHandler, timerHandler)
+  end
   module.gui = function(frame)
     frame:addLabel():setPosition(2,2):setText("Transfer Queue Length:")
     local queueSizeLabel = frame:addLabel():setPosition(2,3):setFontSize(3)
@@ -152,6 +167,8 @@ init = function(loaded, config)
       end
     end)
   end
+
+
 
   return module
 end,

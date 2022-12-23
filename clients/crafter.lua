@@ -21,6 +21,8 @@ local w,h = term.getSize()
 local banner = window.create(term.current(), 1, 1, w, 1)
 local panel = window.create(term.current(),1,2,w,h-1)
 
+local last_state_change = os.epoch("utc")
+
 local turtle_inventory = {}
 local function refresh_turtle_inventory()
   local f = {}
@@ -111,14 +113,37 @@ end
 
 ---@param new_state State
 local function change_state(new_state)
+  if state ~= new_state then
+    last_state_change = os.epoch("utc")
+  end
   state = new_state
+  local item_slots = {}
+  for i, _ in pairs(turtle_inventory) do
+    table.insert(item_slots, i)
+  end
   modem.transmit(port, port, {
     protocol = "KEEP_ALIVE",
     state = state,
     source = network_name,
     destination = "HOST",
+    item_slots = item_slots,
   })
   write_banner()
+end
+
+local function signal_done()
+  refresh_turtle_inventory()
+  local item_slots = {}
+  for i, _ in pairs(turtle_inventory) do
+    table.insert(item_slots, i)
+  end
+  change_state(STATES.DONE)
+  modem.transmit(port, port, {
+    protocol = "CRAFTING_DONE",
+    destination = "HOST",
+    source = network_name,
+    item_slots = item_slots,
+  })
 end
 
 local function try_to_craft()
@@ -141,18 +166,7 @@ local function try_to_craft()
   end
   if ready_to_craft then
     turtle.craft()
-    refresh_turtle_inventory()
-    local item_slots = {}
-    for i, _ in pairs(turtle_inventory) do
-      table.insert(item_slots, i)
-    end
-    change_state(STATES.DONE)
-    modem.transmit(port, port, {
-      protocol = "CRAFTING_DONE",
-      destination = "HOST",
-      source = network_name,
-      item_slots = item_slots,
-    })
+    signal_done()
   end
 end
 
@@ -244,5 +258,29 @@ local function interface()
   end
 end
 
+local retries = 0
+local function error_checker()
+  while true do
+    if os.epoch("utc") - last_state_change > 5000 then
+      last_state_change = os.epoch("utc")
+      if state == STATES.DONE then
+        signal_done()
+        retries = retries + 1
+        if retries > 2 then
+          change_state(STATES.ERROR)
+        end
+      elseif state == STATES.CRAFTING then
+        retries = retries + 1
+        if retries > 2 then
+          change_state(STATES.ERROR)
+        end
+      else
+        retries = 0
+      end
+    end
+    sleep(2)
+  end
+end
+
 write_banner()
-parallel.waitForAny(interface, keep_alive, modem_interface, turtle_inventory_event)
+parallel.waitForAny(interface, keep_alive, modem_interface, turtle_inventory_event, error_checker)

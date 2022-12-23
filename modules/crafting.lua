@@ -316,9 +316,28 @@ init = function(loaded, config)
 
   local attached_turtles = {}
 
+  ---@type table<string,CraftingNode>
+  local transfer_id_task_lut = {}
+
   local update_node_state, change_node_state, delete_task
   local modem = assert(peripheral.wrap(config.crafting.modem.value), "Bad modem specified.")
   modem.open(config.crafting.port.value)
+
+  local function empty_turtle(turtle)
+    for _,slot in pairs(turtle.item_slots) do
+      loaded.inventory.interface.pullItems(true, turtle.name, slot)
+    end
+  end
+
+  local function turtle_crafting_done(turtle)
+    empty_turtle(turtle)
+    if turtle.task then
+      change_node_state(turtle.task, "DONE")
+      update_node_state(turtle.task)
+      turtle.task = nil
+    end
+    turtle.state = "BUSY"
+  end
 
   local protocol_handlers = {
     KEEP_ALIVE = function (message)
@@ -327,15 +346,18 @@ init = function(loaded, config)
       }
       local turtle = attached_turtles[message.source]
       turtle.state = message.state
+      turtle.item_slots = message.item_slots
     end,
     CRAFTING_DONE = function (message)
-      for _,slot in pairs(message.item_slots) do
-        loaded.inventory.interface.pullItems(true, message.source, slot)
-      end
+      print("Done")
       local turtle = attached_turtles[message.source]
-      change_node_state(turtle.task, "DONE")
-      update_node_state(turtle.task)
-      turtle.task = nil
+      turtle.item_slots = message.item_slots
+      turtle_crafting_done(turtle)
+    end,
+    EMPTY = function (message)
+      local turtle = attached_turtles[message.source]
+      turtle.item_slots = message.item_slots
+      empty_turtle(turtle)
     end
   }
 
@@ -530,7 +552,7 @@ init = function(loaded, config)
 
   local _request_craft
   local _request_craft_types = {
-    grid = function(node,name,job_id,remaining)
+    grid = function(node,name,job_id,remaining,request_chain)
       -- attempt to craft this
       local recipe = grid_recipes[name]
       if not recipe then
@@ -556,8 +578,7 @@ init = function(loaded, config)
       node.children = {}
       for k,v in pairs(plan) do
         v.count = to_craft
-        print(k,v.name,"plan?")
-        merge_into(_request_craft(v.name, v.count, job_id), node.children)
+        merge_into(_request_craft(v.name, v.count, job_id, nil, request_chain), node.children)
       end
       for k,v in pairs(node.children) do
         v.parent = node
@@ -571,8 +592,12 @@ init = function(loaded, config)
   ---@param count integer
   ---@param job_id string
   ---@param force boolean|nil
+  ---@param request_chain table<string,boolean>|nil table of item names that have been requested
   ---@return CraftingNode[] leaves ITEM|CG node
-  function _request_craft(name, count, job_id, force)
+  function _request_craft(name, count, job_id, force, request_chain)
+    request_chain = shallow_clone(request_chain or {})
+    assert(not request_chain[name], "Recursive craft")
+    request_chain[name] = true
     ---@type CraftingNode[]
     local nodes = {}
     local remaining = count
@@ -589,18 +614,14 @@ init = function(loaded, config)
       local available = get_count(name)
       if available > 0 and not force then
         -- we do, so allocate it
-        print("allocating", available)
         local allocate_amount = allocate_items(name, math.min(available, remaining))
         node.type = "ITEM"
         node.count = allocate_amount
         remaining = remaining - allocate_amount
       else
-        print("crafting?")
         local success = false
         for k,v in pairs(_request_craft_types) do
-          print("iterating")
-          success = v(node, name, job_id, remaining)
-          print(success)
+          success = v(node, name, job_id, remaining, request_chain)
           if success then
             break
           end
@@ -647,6 +668,9 @@ init = function(loaded, config)
   ---@param node CraftingNode
   ---@param new_state NodeState
   function change_node_state(node, new_state)
+    if not node then
+      error("No node?", 2)
+    end
     if node.state == "WAITING" then
       remove_from_array(waiting_queue, node)
     elseif node.state == "READY" then
@@ -668,11 +692,25 @@ init = function(loaded, config)
     end
   end
 
+  local function push_items(to, name, to_move, slot)
+    local fail_count = 0
+    while to_move > 0 do
+      local transfered = loaded.inventory.interface.pushItems(false, to, name, to_move, slot, nil, {optimal=false})
+      to_move = to_move - transfered
+      if transfered == 0 then
+        fail_count = fail_count + 1
+        if fail_count > 3 then
+          error(("Unable to move %s"):format(name))
+
+        end
+      end
+    end
+  end
+
   ---@type table<string,fun(node: CraftingNode)> Process an item in the READY state
   local ready_handlers = {
     CG = function(node)
       -- check if there is a turtle available to craft this recipe
-      print("Ready handler called")
       local available_turtle
       for k,v in pairs(attached_turtles) do
         if v.state == "READY" then
@@ -684,15 +722,16 @@ init = function(loaded, config)
         change_node_state(node, "CRAFTING")
         send_message({task = node}, available_turtle.name, "CRAFT")
         available_turtle.task = node
-        node.turtle = available_turtle
-        print("Moving items")
+        node.turtle = available_turtle.name
+        local transfers = {}
         for slot,v in pairs(node.plan) do
           local x = (slot-1) % (node.width or 3) + 1
           local y = math.floor((slot-1) / (node.height or 3))
           local turtle_slot = y * 4 + x
-          loaded.inventory.interface.pushItems(true, available_turtle.name, v.name, v.count, turtle_slot, nil, {optimal=false})
+          table.insert(transfers, function() push_items(available_turtle.name, v.name, v.count, turtle_slot) end)
         end
         available_turtle.state = "BUSY"
+        parallel.waitForAll(table.unpack(transfers))
       end
     end
   }
@@ -700,7 +739,11 @@ init = function(loaded, config)
   ---@type table<string,fun(node: CraftingNode)> Process an item that is in the CRAFTING state
   local crafting_handlers = {
     CG = function(node)
-      -- Do nothing.
+      -- -- Check if the turtle's state is DONE
+      -- local turtle = attached_turtles[node.turtle]
+      -- if turtle.state == "DONE" then
+      --   turtle_crafting_done(turtle)
+      -- end
     end
   }
 
@@ -720,7 +763,6 @@ init = function(loaded, config)
     end
     -- this is a node that has been updated before
     if node.state == "WAITING" then
-      print("waiting")
       if node.children then
         -- this has children it depends upon
         local all_children_done = true
@@ -749,11 +791,9 @@ init = function(loaded, config)
         change_node_state(node, "READY")
       end
     elseif node.state == "READY" then
-      print("ready")
       assert(ready_handlers[node.type], "No ready_handler for type "..node.type)
       ready_handlers[node.type](node)
     elseif node.state == "CRAFTING" then
-      print("crafting")
       assert(crafting_handlers[node.type], "No crafting_handler for type "..node.type)
       crafting_handlers[node.type](node)
     elseif node.state == "DONE" and node.children then
@@ -780,8 +820,7 @@ init = function(loaded, config)
         end
       end
     end
-    -- TODO figure out why this doesn't work
-    -- require "common".saveTableToFile("flat_task_lookup.txt", flat_task_lookup)
+    require "common".saveTableToFile("flat_task_lookup.txt", flat_task_lookup)
   end
 
   local function load_task_lookup()
@@ -840,15 +879,29 @@ init = function(loaded, config)
 
   local function tick_crafting()
     while true do
-      print("crafting tick")
       for k,v in pairs(task_lookup) do
-        print("Updating node")
         update_node_state(v)
-        -- print("Finished updating node")
       end
       save_task_lookup()
 
       sleep(1)
+    end
+  end
+
+  local function inventory_transfer_listener()
+    while true do
+      local _, transfer_id = os.pullEvent("inventoryFinished")
+      ---@type CraftingNode
+      local node = transfer_id_task_lut[transfer_id]
+      if node then
+        transfer_id_task_lut[transfer_id] = nil
+        remove_from_array(node.transfers, transfer_id)
+        if #node.transfers == 0 then
+          -- all transfers finished
+          change_node_state(node, "DONE")
+          update_node_state(node)
+        end
+      end
     end
   end
 
@@ -875,11 +928,11 @@ init = function(loaded, config)
     update_whole_tree(root)
     return root
   end
-  request_craft("minecraft:powered_rail", 10)
+  request_craft("minecraft:powered_rail", 128)
 
   return {
     start = function()
-      parallel.waitForAll(modem_manager, keep_alive, tick_crafting)
+      parallel.waitForAll(modem_manager, keep_alive, tick_crafting, inventory_transfer_listener)
     end,
     gui = function (frame)
       frame:addLabel():setText("Drag and drop shaped/unshaped recipe JSONs")
