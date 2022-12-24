@@ -61,7 +61,7 @@ init = function(loaded, config)
         table.insert(transferExecution, function ()
           local retVal = {pcall(function() return storage[transfer[2]](table.unpack(transfer,3,transfer.n)) end)}
           if not retVal[1] then
-            error(transfer[2])
+            error(retVal[2])
           end
           os.queueEvent("inventoryFinished", transfer[1], table.unpack(retVal, 2))
         end)

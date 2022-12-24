@@ -1,55 +1,3 @@
----@alias handle table file handle
----@param f handle
----@param i integer
-local function write_uint16(f, i)
-  f.write(string.pack(">I2", i))
-end
----@param f handle
----@param i integer
-local function write_uint8(f, i)
-  f.write(string.pack("I1", i))
-end
----@param f handle
----@param str string
-local function write_string(f,str)
-  write_uint16(f, str:len())
-  f.write(str)
-end
-
-local function write_uint16_t(f,t)
-  write_uint8(f,#t)
-  for k,v in ipairs(t) do
-    write_uint16(f,v)
-  end
-end
-
----@param f handle
----@return integer
-local function read_uint16(f)
-  return select(1,string.unpack(">I2",f.read(2)))
-end
----@param f handle
----@return integer
-local function read_uint8(f)
-  return select(1,string.unpack("I1",f.read(1)))
-end
----@param f handle
----@return string
-local function read_string(f)
-  local length = string.unpack(">I2", f.read(2))
-  local str = f.read(length)
-  return str
-end
-
-local function read_uint16_t(f)
-  local length = read_uint8(f)
-  local t = {}
-  for i = 1, length do
-    t[i] = read_uint16(f)
-  end
-  return t
-end
-
 local STATES = {
   READY = "READY",
   ERROR = "ERROR",
@@ -57,25 +5,10 @@ local STATES = {
   CRAFTING = "CRAFTING",
 }
 
+local common = require("common")
 return {
 id = "crafting",
 version = "INDEV",
-config = {
-  modem = {
-    type = "string",
-    description = "Modem to host crafting turtles on. This needs to be the same one the turtles AND inventory are on.",
-  },
-  port = {
-    type = "number",
-    description = "Port to host crafting turtles on.",
-    default = 121
-  },
-  keep_alive = {
-    type = "number",
-    description = "Keep alive ping frequency",
-    default = 8,
-  }
-},
 
 init = function(loaded, config)
   ---@class ItemInfo
@@ -90,19 +23,6 @@ init = function(loaded, config)
   ---@type table<string,ItemIndex> lookup from name -> item_lookup index
   local item_name_lookup = {}
 
-  ---@alias RecipeEntry ItemIndex|ItemIndex[]
-
-  ---@class GridRecipe
-  ---@field produces integer
-  ---@field recipe RecipeEntry[]
-  ---@field width integer|nil
-  ---@field height integer|nil
-  ---@field shaped boolean|nil
-  ---@field name string
-  ---@field requires table<ItemIndex,integer> 
-
-  ---@type table<string,GridRecipe>
-  local grid_recipes = {}
 
   ---@param str string
   ---@param tag boolean|nil
@@ -123,21 +43,6 @@ init = function(loaded, config)
     item_name_lookup[str] = i
     return i
   end
-  ---@param recipe GridRecipe
-  local function cache_additional(recipe)
-    recipe.requires = {}
-    for k,v in ipairs(recipe) do
-      if recipe.shaped then
-        for row,i in ipairs(v) do
-          local old = recipe.requires[i]
-          recipe.requires[i] = (old or 0) + 1
-        end
-      else
-        local i = recipe.requires[v]
-        recipe.requires[v] = (i or 0) + 1
-      end
-    end
-  end
 
   local function save_item_lookup()
     local f = assert(fs.open("recipes/item_lookup.bin", "wb"))
@@ -149,7 +54,7 @@ init = function(loaded, config)
       else
         f.write("I")
       end
-      write_string(f, item_name)
+      common.write_string(f, item_name)
     end
     f.close()
   end
@@ -162,7 +67,7 @@ init = function(loaded, config)
     assert(f.read(4) == "ILUT", "Invalid item_lookup file")
     local mode = f.read(1)
     while mode do
-      local name = read_string(f)
+      local name = common.read_string(f)
       local item = {name}
       if mode == "I" then
       elseif mode == "T" then
@@ -174,73 +79,6 @@ init = function(loaded, config)
     f.close()
     for k,v in pairs(item_lookup) do
       item_name_lookup[v[1]] = k
-    end
-  end
-  local function save_grid_recipes()
-    local f = assert(fs.open("recipes/grid_recipes.bin", "wb"))
-    f.write("GRECIPES")
-    for k,v in pairs(grid_recipes) do
-      if v.shaped then
-        f.write("S")
-      else
-        f.write("U")
-      end
-      write_uint8(f, v.produces)
-      write_string(f, k)
-      if v.shaped then
-        local height = v.height
-        local width = v.width
-        write_uint8(f,width)
-        write_uint8(f,height)
-        assert(width*height == #v.recipe, "malformed recipe.")
-      else
-        write_uint8(f,#v.recipe)
-      end
-      for _,i in ipairs(v.recipe) do
-        if type(i) == "number" then
-          f.write("S")
-          write_uint16(f, i)
-        else
-          f.write("A")
-          write_uint16_t(f,i)
-        end
-      end
-    end
-    f.close()
-  end
-  local function load_grid_recipes()
-    local f = assert(fs.open("recipes/grid_recipes.bin", "rb"))
-    assert(f.read(8) == "GRECIPES", "Invalid grid recipe file.")
-    local shape_indicator = f.read(1)
-    while shape_indicator do
-      local recipe = {}
-      recipe.recipe = {}
-      recipe.produces = read_uint8(f)
-      local recipe_name = read_string(f)
-      local length
-      if shape_indicator == "S" then
-        recipe.shaped = true
-        recipe.width = read_uint8(f)
-        recipe.height = read_uint8(f)
-      elseif shape_indicator == "U" then
-        length = read_uint8(f)
-      else
-        error("Invalid shape_indicator")
-      end
-      for i = 1, (length or recipe.width*recipe.height) do
-        local mode = f.read(1)
-        if mode == "S" then
-          recipe.recipe[i] = read_uint16(f)
-        elseif mode == "A" then
-          recipe.recipe[i] = read_uint16_t(f)
-        else
-          error("Invalid mode")
-        end
-      end
-      grid_recipes[recipe_name] = recipe
-      recipe.name = recipe_name
-      cache_additional(recipe)
-      shape_indicator = f.read(1)
     end
   end
 
@@ -300,7 +138,6 @@ init = function(loaded, config)
   end
 
   load_item_lookup()
-  load_grid_recipes()
 
   ---@alias taskID string uuid foriegn key
 
@@ -314,122 +151,12 @@ init = function(loaded, config)
   ---@type table<string,CraftingNode> tasks that have been completed, but are still relavant
   local done_lookup = {}
 
-  local attached_turtles = {}
-
   ---@type table<string,CraftingNode>
   local transfer_id_task_lut = {}
 
   local update_node_state, change_node_state, delete_task
-  local modem = assert(peripheral.wrap(config.crafting.modem.value), "Bad modem specified.")
-  modem.open(config.crafting.port.value)
 
-  local function empty_turtle(turtle)
-    for _,slot in pairs(turtle.item_slots) do
-      loaded.inventory.interface.pullItems(true, turtle.name, slot)
-    end
-  end
-
-  local function turtle_crafting_done(turtle)
-    empty_turtle(turtle)
-    if turtle.task then
-      change_node_state(turtle.task, "DONE")
-      update_node_state(turtle.task)
-      turtle.task = nil
-    end
-    turtle.state = "BUSY"
-  end
-
-  local protocol_handlers = {
-    KEEP_ALIVE = function (message)
-      attached_turtles[message.source] = attached_turtles[message.source] or {
-        name = message.source
-      }
-      local turtle = attached_turtles[message.source]
-      turtle.state = message.state
-      turtle.item_slots = message.item_slots
-    end,
-    CRAFTING_DONE = function (message)
-      print("Done")
-      local turtle = attached_turtles[message.source]
-      turtle.item_slots = message.item_slots
-      turtle_crafting_done(turtle)
-    end,
-    EMPTY = function (message)
-      local turtle = attached_turtles[message.source]
-      turtle.item_slots = message.item_slots
-      empty_turtle(turtle)
-    end
-  }
-
-  local function validate_message(message)
-    local valid = type(message) == "table" and message.protocol ~= nil
-    valid = valid and message.destination == "HOST" and message.source ~= nil
-    return valid
-  end
-
-  local function get_modem_message(filter, timeout)
-    local timer
-    if timeout then
-      timer = os.startTimer(timeout)
-    end
-    while true do
-      ---@type string, string, integer, integer, any, integer
-      local event, side, channel, reply, message, distance = os.pullEvent()
-      if event == "modem_message" and (filter == nil or filter(message)) then
-        if timeout then
-          os.cancelTimer(timer)
-        end
-        return {
-          side = side,
-          channel = channel,
-          reply = reply,
-          message = message,
-          distance = distance
-        }
-      elseif event == "timer" and timeout and side == timer then
-        return
-      end
-    end
-  end
-
-  local function send_message(message, destination, protocol)
-    message.source = "HOST"
-    message.destination = destination
-    message.protocol = protocol
-    modem.transmit(config.crafting.port.value, config.crafting.port.value, message)
-  end
-
-  local function modem_manager()
-    while true do
-      local modem_message = get_modem_message(validate_message)
-      if modem_message then
-        local message = modem_message.message
-        if protocol_handlers[message.protocol] then
-          local response = protocol_handlers[message.protocol](message)
-          if response then
-            response.destination = response.destination or message.source
-            response.source = "HOST"
-            modem.transmit(config.crafting.port.value, config.crafting.port.value, response)
-          end
-        end
-      end
-    end
-  end
-
-  local function keep_alive()
-    while true do
-      modem.transmit(config.crafting.port.value, config.crafting.port.value, {
-        protocol = "KEEP_ALIVE",
-        source = "HOST",
-        destination = "*",
-      })
-      sleep(config.crafting.keep_alive.value)
-    end
-  end
-
-  ---@alias NodeType string | "ITEM" | "CG" | "ROOT"
   --- ITEM - this node represents a quantity of items from the network
-  --- CG - this node represents a grid crafting task
   --- ROOT - this node represents the root of a crafting task
 
   ---@alias NodeState string | "WAITING" | "READY" | "CRAFTING" | "DONE"
@@ -437,33 +164,43 @@ init = function(loaded, config)
   ---@class CraftingNode
   ---@field children CraftingNode[]|nil
   ---@field parent CraftingNode|nil
-  ---@field type NodeType
+  ---@field type "ITEM" | "ROOT"
   ---@field name string
   ---@field count integer amount of this item to produce
   ---@field task_id string
   ---@field job_id string
   ---@field state NodeState
-  ---@field priority integer
-  ---@field to_craft integer|nil type=="CG"
-  ---@field plan table|nil type=="CG"
+  ---@field priority integer TODO
 
   ---@type table<string,integer> item name -> count reserved
   local reserved_items = {}
 
+  ---Get count of item in system, excluding reserved
+  ---@param name string
+  ---@return integer
   local function get_count(name)
     return loaded.inventory.interface.getCount(name) - (reserved_items[name] or 0)
   end
 
+  ---Reserve amount of item name
   ---@param name string
   ---@param amount integer
+  ---@return integer
   local function allocate_items(name, amount)
     reserved_items[name] = (reserved_items[name] or 0) + amount
     return amount
   end
 
+  ---Free amount of item name
+  ---@param name string
+  ---@param amount integer
+  ---@return integer
   local function deallocate_items(name, amount)
     reserved_items[name] = reserved_items[name] - amount
     assert(reserved_items[name] >= 0, "We have negative items reserved?")
+    if reserved_items[name] == 0 then
+      reserved_items[name] = nil
+    end
     return amount
   end
 
@@ -481,11 +218,14 @@ init = function(loaded, config)
   end
 
   local cached_stack_sizes = {} -- TODO
+  ---Get the maximum stacksize of an item by name
   ---@param name string
   local function get_stack_size(name)
     return 64 -- TODO
   end
 
+  ---Get a psuedorandom uuid
+  ---@return string
   local function id()
     return os.epoch("utc")..math.random(1,100000)..string.char(math.random(65,90))
   end
@@ -527,20 +267,26 @@ init = function(loaded, config)
     error("hah not any")
   end
 
+  ---Merge from into the end of to
+  ---@param from table
+  ---@param to table
   local function merge_into(from, to)
     for k,v in pairs(from) do
       table.insert(to,v)
     end
   end
 
-  
-
+  ---Lookup from task_id to the corrosponding CraftingNode
   ---@type table<string,CraftingNode>
   local task_lookup = {}
 
+  ---Lookup from job_id to the corrosponding CraftingNode
   ---@type table<string,CraftingNode[]>
   local job_lookup = {}
 
+  ---Shallow clone a table
+  ---@param t table
+  ---@return table
   local function shallow_clone(t)
     local nt = {}
     for k,v in pairs(t) do
@@ -549,44 +295,12 @@ init = function(loaded, config)
     return nt
   end
 
-
   local _request_craft
-  local _request_craft_types = {
-    grid = function(node,name,job_id,remaining,request_chain)
-      -- attempt to craft this
-      local recipe = grid_recipes[name]
-      if not recipe then
-        return false
-      end
-      node.type = "CG"
-      -- find out how many times we need to craft this recipe
-      local to_craft = math.ceil(remaining / recipe.produces)
-      -- this is the minimum amount we'd need to craft to produce enough of the requested item
-      -- now we need to find the smallest stack-size of the ingredients
-      ---@type table<integer,{name: string, max: integer, count: integer}>
-      local plan = {}
-      for k,v in pairs(recipe.recipe) do
-        if v ~= 0 then
-          plan[k] = {name = get_best_item(v)}
-          plan[k].max = get_stack_size(plan[k].name)
-          to_craft = math.min(to_craft, plan[k].max)
-          -- We can only craft as many items as the smallest stack size allows us to
-        end
-      end
-      node.plan = plan
-      node.to_craft = to_craft
-      node.children = {}
-      for k,v in pairs(plan) do
-        v.count = to_craft
-        merge_into(_request_craft(v.name, v.count, job_id, nil, request_chain), node.children)
-      end
-      for k,v in pairs(node.children) do
-        v.parent = node
-      end
-      node.count = to_craft * recipe.produces
-      return true
-    end
-  }
+  ---@type table<string,fun(node:CraftingNode,name:string,job_id:string,count:integer,request_chain:table):boolean>
+  local request_craft_types = {} -- TODO load this from grid.lua
+  local function add_request_craft_type(type, func)
+    request_craft_types[type] = func
+  end
 
   ---@param name string item name
   ---@param count integer
@@ -620,7 +334,7 @@ init = function(loaded, config)
         remaining = remaining - allocate_amount
       else
         local success = false
-        for k,v in pairs(_request_craft_types) do
+        for k,v in pairs(request_craft_types) do
           success = v(node, name, job_id, remaining, request_chain)
           if success then
             break
@@ -648,6 +362,10 @@ init = function(loaded, config)
     end
   end
 
+  ---Remove an object from a table
+  ---@generic T : any
+  ---@param arr T[]
+  ---@param val T
   local function remove_from_array(arr, val)
     for i,v in ipairs(arr) do
       if v == val then
@@ -656,6 +374,8 @@ init = function(loaded, config)
     end
   end
 
+  ---Delete a given task, given the task is DONE and has no children
+  ---@param task CraftingNode
   function delete_task(task)
     if task.type == "ITEM" then
       deallocate_items(task.name, task.count)
@@ -665,6 +385,8 @@ init = function(loaded, config)
     assert(task.children == nil, "Attempt to delete task with children.")
   end
 
+  ---Safely change a node to a new state
+  ---Only modifies the node's state and related caches
   ---@param node CraftingNode
   ---@param new_state NodeState
   function change_node_state(node, new_state)
@@ -692,6 +414,12 @@ init = function(loaded, config)
     end
   end
 
+  ---Protected pushItems, errors if it cannot move
+  ---enough items to a slot
+  ---@param to string
+  ---@param name string
+  ---@param to_move integer
+  ---@param slot integer
   local function push_items(to, name, to_move, slot)
     local fail_count = 0
     while to_move > 0 do
@@ -701,53 +429,30 @@ init = function(loaded, config)
         fail_count = fail_count + 1
         if fail_count > 3 then
           error(("Unable to move %s"):format(name))
-
         end
       end
     end
   end
 
   ---@type table<string,fun(node: CraftingNode)> Process an item in the READY state
-  local ready_handlers = {
-    CG = function(node)
-      -- check if there is a turtle available to craft this recipe
-      local available_turtle
-      for k,v in pairs(attached_turtles) do
-        if v.state == "READY" then
-          available_turtle = v
-          break
-        end
-      end
-      if available_turtle then
-        change_node_state(node, "CRAFTING")
-        send_message({task = node}, available_turtle.name, "CRAFT")
-        available_turtle.task = node
-        node.turtle = available_turtle.name
-        local transfers = {}
-        for slot,v in pairs(node.plan) do
-          local x = (slot-1) % (node.width or 3) + 1
-          local y = math.floor((slot-1) / (node.height or 3))
-          local turtle_slot = y * 4 + x
-          table.insert(transfers, function() push_items(available_turtle.name, v.name, v.count, turtle_slot) end)
-        end
-        available_turtle.state = "BUSY"
-        parallel.waitForAll(table.unpack(transfers))
-      end
-    end
-  }
+  local ready_handlers = {} -- TODO get this from grid.lua
+
+  ---@param type string
+  ---@param func fun(node: CraftingNode)>
+  local function add_ready_handler(type, func)
+    ready_handlers[type] = func
+  end
 
   ---@type table<string,fun(node: CraftingNode)> Process an item that is in the CRAFTING state
-  local crafting_handlers = {
-    CG = function(node)
-      -- -- Check if the turtle's state is DONE
-      -- local turtle = attached_turtles[node.turtle]
-      -- if turtle.state == "DONE" then
-      --   turtle_crafting_done(turtle)
-      -- end
-    end
-  }
+  local crafting_handlers = {} -- TODO get this from grid.lua
 
+  ---@param type string
+  ---@param func fun(node: CraftingNode)>
+  local function add_crafting_handler(type, func)
+    crafting_handlers[type] = func
+  end
 
+  ---Update the state of the given node
   ---@param node CraftingNode
   function update_node_state(node)
     if not node.state then
@@ -850,19 +555,32 @@ init = function(loaded, config)
     end
   end
 
+  ---Update every node on the tree
+  ---@param tree CraftingNode
   local function update_whole_tree(tree)
     -- traverse to each node of the tree
     run_on_all(tree, update_node_state)
   end
 
+  ---Remove the parent of each child
+  ---@param node CraftingNode
+  local function remove_childrens_parent(node)
+    for k,v in pairs(node) do
+      v.parent = nil
+    end
+  end
 
+  ---Safely cancel a task by ID
+  ---@param task_id string
   local function cancel_task(task_id)
     local task = task_lookup[task_id]
     if task.state then
       if task.state == "WAITING" then
         remove_from_array(waiting_queue, task)
+        remove_childrens_parent(task)
       elseif task.state == "READY" then
         remove_from_array(ready_queue, task)
+        remove_childrens_parent(task)
       end
       -- if it's not in these two states, then it's not cancellable
       return
@@ -870,6 +588,8 @@ init = function(loaded, config)
     task_lookup[task_id] = nil
   end
 
+  ---Cancel a job by given id
+  ---@param job_id any
   local function cancel_job(job_id)
     for k,v in pairs(job_lookup[job_id]) do
       cancel_task(v.task_id)
@@ -928,12 +648,12 @@ init = function(loaded, config)
     update_whole_tree(root)
     return root
   end
-  request_craft("minecraft:powered_rail", 128)
 
   return {
     start = function()
-      parallel.waitForAll(modem_manager, keep_alive, tick_crafting, inventory_transfer_listener)
+      parallel.waitForAny(tick_crafting, inventory_transfer_listener)
     end,
+
     gui = function (frame)
       frame:addLabel():setText("Drag and drop shaped/unshaped recipe JSONs")
       frame:addButton():setText("Save"):onClick(function()
@@ -956,7 +676,22 @@ init = function(loaded, config)
           end
         end
       end)
-    end
+    end,
+
+    request_craft = request_craft,
+
+    recipeInterface = {
+      change_node_state = change_node_state,
+      update_node_state = update_node_state,
+      get_best_item = get_best_item,
+      get_stack_size = get_stack_size,
+      merge_into = merge_into,
+      _request_craft = _request_craft,
+      push_items = push_items,
+      add_crafting_handler = add_crafting_handler,
+      add_ready_handler = add_ready_handler,
+      add_request_craft_type = add_request_craft_type
+    }
   }
 end
 }
