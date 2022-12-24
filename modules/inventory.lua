@@ -1,3 +1,4 @@
+local common = require("common")
 return {
 id = "inventory",
 version = "INDEV",
@@ -35,6 +36,7 @@ init = function(loaded, config)
   local cacheTimer = os.startTimer(config.inventory.cacheTimer.value)
   local transferQueueDiffers = false
 
+  ---Signal the system to perform a transfer
   local function performTransfer()
     if transferTimer then
       os.cancelTimer(transferTimer)
@@ -43,6 +45,8 @@ init = function(loaded, config)
     os.queueEvent("_performTransfer")
   end
 
+  ---Queue handling function
+  ---Waits to do an optimal transfer of the whole queue
   local function queueHandler()
     if #transferQueue > 0 then
       performTransfer()
@@ -64,6 +68,8 @@ init = function(loaded, config)
       end
       transferQueueDiffers = true
       -- parallel.waitForAll(table.unpack(transferExecution))
+      -- This is temporarily changed from being in parallel
+      -- Just for easier devving
       for _,f in pairs(transferExecution) do
         f()
       end
@@ -71,6 +77,7 @@ init = function(loaded, config)
     end
   end
 
+  ---Handles timers
   local function timerHandler()
     while true do
       local e, id = os.pullEvent("timer")
@@ -86,7 +93,10 @@ init = function(loaded, config)
     end
   end
 
-  local function addToQueue(...)
+  ---Add the given arguments to the queue
+  ---@param id string
+  ---@param ... any
+  local function addToQueue(id, ...)
     table.insert(transferQueue, table.pack(...))
     if (#transferQueue > config.inventory.flushLimit.value) then
       performTransfer()
@@ -96,10 +106,15 @@ init = function(loaded, config)
     transferQueueDiffers = true
   end
 
+  ---Generate a pseudo random ID
+  ---@return string
   local function getID()
     return tostring({})
   end
 
+  ---Add the given arguments to the queue, generating an id
+  ---@param ... any
+  ---@return string
   local function queueAction(...)
     local id = getID()
     addToQueue(id, ...)
@@ -139,7 +154,10 @@ init = function(loaded, config)
   end
   if config.inventory.defragOnStart.value then
     print("Defragmenting...")
+    local t0 = os.epoch("utc")
     storage.defrag()
+    common.printf("Defrag done in %.2f seconds.",
+      (os.epoch("utc")-t0)/1000)
   end
 
   local module = {}
