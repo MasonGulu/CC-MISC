@@ -61,7 +61,7 @@ init = function(loaded, config)
         table.insert(transferExecution, function ()
           local retVal = {pcall(function() return storage[transfer[2]](table.unpack(transfer,3,transfer.n)) end)}
           if not retVal[1] then
-            error(retVal[2])
+            error(transfer[2])
           end
           os.queueEvent("inventoryFinished", transfer[1], table.unpack(retVal, 2))
         end)
@@ -97,7 +97,7 @@ init = function(loaded, config)
   ---@param id string
   ---@param ... any
   local function addToQueue(id, ...)
-    table.insert(transferQueue, table.pack(...))
+    table.insert(transferQueue, table.pack(id, ...))
     if (#transferQueue > config.inventory.flushLimit.value) then
       performTransfer()
     elseif not transferTimer then
