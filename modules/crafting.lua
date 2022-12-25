@@ -616,7 +616,7 @@ init = function(loaded, config)
       end
       save_task_lookup()
 
-      sleep(1)
+      os.sleep(1)
     end
   end
 
