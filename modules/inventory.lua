@@ -64,7 +64,7 @@ init = function(loaded, config)
         transferTimer = nil
       end
       while inventoryLock do
-        sleep(0)
+        os.sleep(0)
       end
       if logger then
         logger:debug("Starting transfer")

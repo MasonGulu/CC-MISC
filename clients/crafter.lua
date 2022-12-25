@@ -170,7 +170,7 @@ local function empty()
       item_slots = item_slots
     })
     item_slots = get_item_slots()
-    sleep(3)
+    os.sleep(3)
     -- this delay needs to be high enough
     -- to allow the inventory system to
     -- actually perform the transfers
@@ -322,7 +322,7 @@ local function error_checker()
         retries = 0
       end
     end
-    sleep(1)
+    os.sleep(1)
     write_banner()
   end
 end

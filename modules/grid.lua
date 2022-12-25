@@ -244,7 +244,7 @@ init = function(loaded,config)
         source = "HOST",
         destination = "*",
       })
-      sleep(config.grid.keep_alive.value)
+      os.sleep(config.grid.keep_alive.value)
     end
   end
 
