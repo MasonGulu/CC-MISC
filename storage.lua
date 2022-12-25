@@ -4,10 +4,13 @@ local printf = common.printf
 ---@type table array of module filenames to load
 local modules = {
   --"modules.debug",
+  "modules.logger",
   "modules.inventory",
   "modules.crafting",
+  "modules.grid",
   "modules.rednet",
   -- "modules.gui",
+  -- "modules.tui"
 }
 
 -- A module should return a table that contains at least the following fields

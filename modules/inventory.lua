@@ -10,17 +10,17 @@ config = {
   flushTimer = {
     type = "number",
     description = "Time to wait after a transfer is queued before performing the transfers",
-    default = 3,
+    default = 1,
   },
   flushLimit = {
     type = "number",
     description = "Immediately flush the transfer queue when this many transfers are in it",
-    default = 10,
+    default = 5,
   },
   cacheTimer = {
     type = "number",
     description = "Sync the transfer cache to disk every n seconds.",
-    default = 10,
+    default = 5,
   },
   defragOnStart = {
     type = "boolean",
@@ -29,12 +29,14 @@ config = {
   }
 },
 init = function(loaded, config)
+  local log = loaded.logger
   local storage = require("abstractInvLib")(config.inventory.inventories.value)
   storage.refreshStorage(true)
   local transferQueue = require("common").loadTableFromFile(".cache/transferQueue") or {}
   local transferTimer
   local cacheTimer = os.startTimer(config.inventory.cacheTimer.value)
   local transferQueueDiffers = false
+  local inventoryLock = false
 
   ---Signal the system to perform a transfer
   local function performTransfer()
@@ -48,32 +50,53 @@ init = function(loaded, config)
   ---Queue handling function
   ---Waits to do an optimal transfer of the whole queue
   local function queueHandler()
+    local logger
+    if log then
+      logger = loaded.logger.interface.logger("inventory","queueHandler")
+    end
     if #transferQueue > 0 then
       performTransfer()
     end
     while true do
       os.pullEvent("_performTransfer")
+      if transferTimer then
+        os.cancelTimer(transferTimer)
+        transferTimer = nil
+      end
+      while inventoryLock do
+        sleep(0)
+      end
+      if logger then
+        logger:debug("Starting transfer")
+      end
       local transferQueueCopy = {table.unpack(transferQueue)}
       transferQueue = {}
       local transferExecution = {}
       for _,v in pairs(transferQueueCopy) do
         local transfer = v
         table.insert(transferExecution, function ()
-          local retVal = {pcall(function() return storage[transfer[2]](table.unpack(transfer,3,transfer.n)) end)}
+          if logger then
+            logger:debug("Transfer %s %s %s %s %s %s", table.unpack(transfer))
+          end
+          local retVal = table.pack(pcall(function() return storage[transfer[2]](table.unpack(transfer,3,transfer.n)) end))
           if not retVal[1] then
+            if logger then
+              logger:error("Transfer %s %s failed with %s", transfer[1], transfer[2], retVal[2])
+            end
             error(retVal[2])
+          end
+          if logger then
+            logger:debug("Transfer %s %s finished, returned %s", transfer[1], transfer[2], retVal[2])
           end
           os.queueEvent("inventoryFinished", transfer[1], table.unpack(retVal, 2))
         end)
       end
       transferQueueDiffers = true
-      -- parallel.waitForAll(table.unpack(transferExecution))
-      -- This is temporarily changed from being in parallel
-      -- Just for easier devving
-      for _,f in pairs(transferExecution) do
-        f()
-      end
+      parallel.waitForAll(table.unpack(transferExecution))
       storage.defrag()
+      if #transferQueue > 0 then
+        performTransfer()
+      end
     end
   end
 
@@ -121,6 +144,14 @@ init = function(loaded, config)
     return id
   end
 
+  local function waitForTransfer(id)
+    local e
+    repeat
+      e = {os.pullEvent("inventoryFinished")}
+    until e[2] == id
+    return e
+  end
+
   ---Push items to an inventory
   ---@param async boolean|nil
   ---@param targetInventory string|AbstractInventory
@@ -131,10 +162,11 @@ init = function(loaded, config)
   ---@param options nil|TransferOptions
   ---@return integer|string count event name in case of async
   local function pushItems(async, targetInventory, name, amount, toSlot, nbt, options)
+    local id = queueAction("pushItems", targetInventory, name, amount, toSlot, nbt, options)
     if async then
-      return queueAction("pushItems", targetInventory, name, amount, toSlot, nbt, options)
+      return id
     end
-    return storage.pushItems(targetInventory, name, amount, toSlot, nbt, options)
+    return table.unpack(waitForTransfer(id),3)
   end
 
   ---Pull items from an inventory
@@ -147,11 +179,19 @@ init = function(loaded, config)
   ---@param options nil|TransferOptions
   ---@return integer|string count event name in case of async
   local function pullItems(async, fromInventory, fromSlot, amount, toSlot, nbt, options)
+    local id = queueAction("pullItems", fromInventory, fromSlot, amount, toSlot, nbt, options)
     if async then
-      return queueAction("pullItems", fromInventory, fromSlot, amount, toSlot, nbt, options)
+      return id
     end
-    return storage.pullItems(fromInventory, fromSlot, amount, toSlot, nbt, options)
+    return table.unpack(waitForTransfer(id),3)
   end
+
+  local function defrag()
+    inventoryLock = true
+    storage.defrag()
+    inventoryLock = false
+  end
+
   if config.inventory.defragOnStart.value then
     print("Defragmenting...")
     local t0 = os.epoch("utc")
@@ -168,6 +208,7 @@ init = function(loaded, config)
   end
   module.pushItems = pushItems
   module.pullItems = pullItems
+  module.defrag = defrag
   module.start = function()
     parallel.waitForAny(queueHandler, timerHandler)
   end
@@ -185,8 +226,6 @@ init = function(loaded, config)
       end
     end)
   end
-
-
 
   return module
 end,

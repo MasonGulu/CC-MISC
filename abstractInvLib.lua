@@ -124,11 +124,9 @@ function abstractInventory(inventories, assumeLimits)
         if itemSpaceLUT[oldItem.name] and itemSpaceLUT[oldItem.name][oldNBT] then
           itemSpaceLUT[oldItem.name][oldNBT][oldCache] = nil
         end
-      else
-        -- there wasn't an item here before, remove this from the empty cache
-        removeSlotFromEmptySlots(inventory,slot)
       end
     end
+    removeSlotFromEmptySlots(inventory,slot)
     if not inventorySlotLUT[inventory][slot] then
       inventorySlotLUT[inventory][slot] = {
         item = item,
@@ -136,8 +134,6 @@ function abstractInventory(inventories, assumeLimits)
         slot = slot,
         globalSlot = inventorySlotNumberLUT[inventory][slot]
       }
-      -- this slot was empty before, make sure it's not now
-      removeSlotFromEmptySlots(inventory,slot)
     end
     if not inventorySlotLUT[inventory][slot].capacity then
       if api.assumeLimits and inventoryLimit[inventory] then
@@ -802,7 +798,7 @@ function abstractInventory(inventories, assumeLimits)
       end)
     end
     parallel.waitForAll(table.unpack(f))
-    -- This function completely 
+    api.refreshStorage(true) -- this messes with the cache in some way I currently cannot figure out.
   end
 
   ---Get a CachedItem by name/nbt

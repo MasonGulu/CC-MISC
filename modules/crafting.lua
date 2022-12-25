@@ -11,6 +11,7 @@ id = "crafting",
 version = "INDEV",
 
 init = function(loaded, config)
+  local log = loaded.logger
   ---@class ItemInfo
   ---@field [1] string
   ---@field tag boolean|nil
@@ -295,6 +296,10 @@ init = function(loaded, config)
     return nt
   end
 
+  local craft_logger
+  if log then
+    craft_logger = log.interface.logger("crafting","request_craft")
+  end
   local _request_craft
   ---@type table<string,fun(node:CraftingNode,name:string,job_id:string,count:integer,request_chain:table):boolean>
   local request_craft_types = {} -- TODO load this from grid.lua
@@ -332,11 +337,18 @@ init = function(loaded, config)
         node.type = "ITEM"
         node.count = allocate_amount
         remaining = remaining - allocate_amount
+        if log then
+          craft_logger:debug("Item. name:%s,count:%u,task_id:%s,job_id:%s", name, allocate_amount, node.task_id, job_id)
+        end
       else
         local success = false
         for k,v in pairs(request_craft_types) do
           success = v(node, name, job_id, remaining, request_chain)
           if success then
+            if log then
+              craft_logger:debug("Recipe. provider:%s,name:%s,count:%u,task_id:%s,job_id:%s", k, name, node.count, node.task_id, job_id)
+              craft_logger:info("Recipe for %s was provided by %s", name, k)
+            end
             break
           end
         end
@@ -608,6 +620,10 @@ init = function(loaded, config)
     end
   end
 
+  local inventory_transfer_logger
+  if log then
+    inventory_transfer_logger = log.interface.logger("crafting","inventory_transfer_listener")
+  end
   local function inventory_transfer_listener()
     while true do
       local _, transfer_id = os.pullEvent("inventoryFinished")
@@ -617,6 +633,9 @@ init = function(loaded, config)
         transfer_id_task_lut[transfer_id] = nil
         remove_from_array(node.transfers, transfer_id)
         if #node.transfers == 0 then
+          if log then
+            inventory_transfer_logger:debug("Node DONE, task_id:%s, job_id:%s", node.task_id, node.job_id)
+          end
           -- all transfers finished
           change_node_state(node, "DONE")
           update_node_state(node)
@@ -632,6 +651,11 @@ init = function(loaded, config)
     local job_id = id()
     job_lookup[job_id] = {}
     local ok, job = pcall(_request_craft, name, count, job_id, true)
+
+    if log then
+      craft_logger:debug("New job. name:%s,count:%u,job_id:%s", name, count, job_id)
+      craft_logger:info("Requested craft for %ux%s", count, name)
+    end
 
     if not ok then
       error(job) -- TODO

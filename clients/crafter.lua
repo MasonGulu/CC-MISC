@@ -69,6 +69,22 @@ local function get_modem_message(filter, timeout)
     end
   end
 end
+local last_char = "|"
+local char_state_lookup = {
+  ["|"] = "/",
+  ["/"] = "-",
+  ["-"] = "\\",
+  ["\\"] = "|",
+}
+local last_char_update = os.epoch("utc")
+local function get_activity_char()
+  if os.epoch("utc") - last_char_update < 50 then
+    return last_char
+  end
+  last_char_update = os.epoch("utc")
+  last_char = char_state_lookup[last_char]
+  return last_char
+end
 local function write_banner()
   local x, y = term.getCursorPos()
 
@@ -86,6 +102,9 @@ local function write_banner()
   banner.setCursorPos(w-state:len(),1)
   banner.write(state)
   term.setCursorPos(x,y)
+
+  os.setComputerLabel(
+    ("%s %s - %s"):format(get_activity_char(), network_name, state))
 end
 local function keep_alive()
   while true do
@@ -131,12 +150,35 @@ local function change_state(new_state)
   write_banner()
 end
 
-local function signal_done()
+local function get_item_slots()
   refresh_turtle_inventory()
   local item_slots = {}
   for i, _ in pairs(turtle_inventory) do
     table.insert(item_slots, i)
   end
+  return item_slots
+
+end
+
+local function empty()
+  local item_slots = get_item_slots()
+  repeat
+    modem.transmit(port, port, {
+      protocol = "EMPTY",
+      destination = "HOST",
+      source = network_name,
+      item_slots = item_slots
+    })
+    item_slots = get_item_slots()
+    sleep(3)
+    -- this delay needs to be high enough
+    -- to allow the inventory system to
+    -- actually perform the transfers
+  until #item_slots == 0
+end
+
+local function signal_done()
+  local item_slots = get_item_slots()
   change_state(STATES.DONE)
   modem.transmit(port, port, {
     protocol = "CRAFTING_DONE",
@@ -244,7 +286,7 @@ interface_lut = {
     os.reboot()
   end
 }
-local function interface()
+function interface()
   print("Crafting turtle indev")
   while true do
     col_write(colors.cyan, "] ")
@@ -261,26 +303,31 @@ end
 local retries = 0
 local function error_checker()
   while true do
-    if os.epoch("utc") - last_state_change > 5000 then
+    if os.epoch("utc") - last_state_change > 10000 then
       last_state_change = os.epoch("utc")
       if state == STATES.DONE then
         signal_done()
         retries = retries + 1
         if retries > 2 then
+          print("Done too long")
           change_state(STATES.ERROR)
         end
       elseif state == STATES.CRAFTING then
         retries = retries + 1
         if retries > 2 then
+          print("Crafting too long")
           change_state(STATES.ERROR)
         end
       else
         retries = 0
       end
     end
-    sleep(2)
+    sleep(1)
+    write_banner()
   end
 end
 
 write_banner()
-parallel.waitForAny(interface, keep_alive, modem_interface, turtle_inventory_event, error_checker)
+pcall(parallel.waitForAny, interface, keep_alive, modem_interface, turtle_inventory_event, error_checker)
+
+os.setComputerLabel(("X %s - %s"):format(network_name, "OFFLINE"))

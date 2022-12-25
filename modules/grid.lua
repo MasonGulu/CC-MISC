@@ -42,6 +42,7 @@ init = function(loaded,config)
 
   local crafting = loaded.crafting.interface.recipeInterface
 
+  ---Cache information about a GridRecipe that can be inferred from stored data
   ---@param recipe GridRecipe
   local function cache_additional(recipe)
     recipe.requires = {}
@@ -57,6 +58,8 @@ init = function(loaded,config)
       end
     end
   end
+
+  ---Save the grid recipes to a file
   local function save_grid_recipes()
     local f = assert(fs.open("recipes/grid_recipes.bin", "wb"))
     f.write("GRECIPES")
@@ -92,6 +95,8 @@ init = function(loaded,config)
     end
     f.close()
   end
+
+  ---Load the grid recipes from a file
   local function load_grid_recipes()
     local f = assert(fs.open("recipes/grid_recipes.bin", "rb"))
     assert(f.read(8) == "GRECIPES", "Invalid grid recipe file.")
@@ -129,6 +134,13 @@ init = function(loaded,config)
   end
 
   load_grid_recipes()
+
+  ---@class Turtle
+  ---@field name string
+  ---@field task nil|GridNode
+  ---@field state "READY" | "ERROR" | "BUSY" | "CRAFTING" | "DONE"
+
+
   local attached_turtles = {}
   local modem = assert(peripheral.wrap(config.grid.modem.value), "Bad modem specified.")
   modem.open(config.grid.port.value)
@@ -140,7 +152,6 @@ init = function(loaded,config)
   end
 
   local function turtle_crafting_done(turtle)
-    empty_turtle(turtle)
     if turtle.task then
       crafting.change_node_state(turtle.task, "DONE")
       crafting.update_node_state(turtle.task)
@@ -159,9 +170,9 @@ init = function(loaded,config)
       turtle.item_slots = message.item_slots
     end,
     CRAFTING_DONE = function (message)
-      print("Done")
       local turtle = attached_turtles[message.source]
       turtle.item_slots = message.item_slots
+      empty_turtle(turtle)
       turtle_crafting_done(turtle)
     end,
     EMPTY = function (message)
@@ -250,7 +261,6 @@ init = function(loaded,config)
     if not recipe then
       return false
     end
-    print("???")
     node.type = "CG"
     -- find out how many times we need to craft this recipe
     local to_craft = math.ceil(count / recipe.produces)
@@ -318,7 +328,7 @@ init = function(loaded,config)
   crafting.add_crafting_handler("CG", crafting_handler)
   return {
     start = function()
-      loaded.crafting.interface.request_craft("minecraft:powered_rail", 128)
+      loaded.crafting.interface.request_craft("minecraft:detector_rail", 128)
       parallel.waitForAny(modem_manager, keep_alive)
     end
   }
