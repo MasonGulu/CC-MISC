@@ -154,7 +154,8 @@ init = function(loaded,config)
   local function turtle_crafting_done(turtle)
     if turtle.task then
       crafting.change_node_state(turtle.task, "DONE")
-      crafting.update_node_state(turtle.task)
+      crafting.delete_node_children(turtle.task)
+      crafting.delete_task(turtle.task)
       turtle.task = nil
     end
     turtle.state = "BUSY"
@@ -328,7 +329,7 @@ init = function(loaded,config)
   crafting.add_crafting_handler("CG", crafting_handler)
   return {
     start = function()
-      loaded.crafting.interface.request_craft("minecraft:detector_rail", 128)
+      loaded.crafting.interface.request_craft("minecraft:piston", 128)
       parallel.waitForAny(modem_manager, keep_alive)
     end
   }

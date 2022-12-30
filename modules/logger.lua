@@ -51,7 +51,7 @@ init = function (loaded, config)
       return
     end
     local f = assert(fs.open(config.logger.file.value, "a"), "Cannot open log file")
-    f.write(("[%s:%s][%s] %s\n"):format(self.module, self.thread, level, msg))
+    f.write(("[%5s][%s:%s] %s\n"):format(level, self.module, self.thread, msg))
     f.close()
   end
 

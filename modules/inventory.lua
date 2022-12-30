@@ -50,7 +50,7 @@ init = function(loaded, config)
   ---Queue handling function
   ---Waits to do an optimal transfer of the whole queue
   local function queueHandler()
-    local logger
+    local logger = setmetatable({}, {__index=function () return function () end end})
     if log then
       logger = loaded.logger.interface.logger("inventory","queueHandler")
     end
@@ -75,19 +75,13 @@ init = function(loaded, config)
       for _,v in pairs(transferQueueCopy) do
         local transfer = v
         table.insert(transferExecution, function ()
-          if logger then
-            logger:debug("Transfer %s %s %s %s %s %s", table.unpack(transfer))
-          end
+          logger:debug("Transfer %s %s %s %s %s %s", table.unpack(transfer))
           local retVal = table.pack(pcall(function() return storage[transfer[2]](table.unpack(transfer,3,transfer.n)) end))
           if not retVal[1] then
-            if logger then
-              logger:error("Transfer %s %s failed with %s", transfer[1], transfer[2], retVal[2])
-            end
+            logger:error("Transfer %s %s failed with %s", transfer[1], transfer[2], retVal[2])
             error(retVal[2])
           end
-          if logger then
-            logger:debug("Transfer %s %s finished, returned %s", transfer[1], transfer[2], retVal[2])
-          end
+          logger:debug("Transfer %s %s finished, returned %s", transfer[1], transfer[2], retVal[2])
           os.queueEvent("inventoryFinished", transfer[1], table.unpack(retVal, 2))
         end)
       end

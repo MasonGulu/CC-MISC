@@ -9,7 +9,13 @@ local common = require("common")
 return {
 id = "crafting",
 version = "INDEV",
-
+config = {
+  tagLookup = {
+    type="table",
+    description="Force a given item to be used for a tag lookup. Map from tag->item.",
+    default={}
+  }
+},
 init = function(loaded, config)
   local log = loaded.logger
   ---@class ItemInfo
@@ -235,6 +241,9 @@ init = function(loaded, config)
   ---@param tag string
   ---@return string name
   local function select_best_from_tag(tag)
+    if config.crafting.tagLookup.value[tag] then
+      return config.crafting.tagLookup.value[tag]
+    end
     error("Not yet implemented")
   end
 
@@ -296,7 +305,7 @@ init = function(loaded, config)
     return nt
   end
 
-  local craft_logger
+  local craft_logger = setmetatable({}, {__index=function () return function () end end})
   if log then
     craft_logger = log.interface.logger("crafting","request_craft")
   end
@@ -315,7 +324,9 @@ init = function(loaded, config)
   ---@return CraftingNode[] leaves ITEM|CG node
   function _request_craft(name, count, job_id, force, request_chain)
     request_chain = shallow_clone(request_chain or {})
-    assert(not request_chain[name], "Recursive craft")
+    if request_chain[name] then
+      error("Recursive craft", 0)
+    end
     request_chain[name] = true
     ---@type CraftingNode[]
     local nodes = {}
@@ -337,23 +348,19 @@ init = function(loaded, config)
         node.type = "ITEM"
         node.count = allocate_amount
         remaining = remaining - allocate_amount
-        if log then
-          craft_logger:debug("Item. name:%s,count:%u,task_id:%s,job_id:%s", name, allocate_amount, node.task_id, job_id)
-        end
+        craft_logger:debug("Item. name:%s,count:%u,task_id:%s,job_id:%s", name, allocate_amount, node.task_id, job_id)
       else
         local success = false
         for k,v in pairs(request_craft_types) do
           success = v(node, name, job_id, remaining, request_chain)
           if success then
-            if log then
-              craft_logger:debug("Recipe. provider:%s,name:%s,count:%u,task_id:%s,job_id:%s", k, name, node.count, node.task_id, job_id)
-              craft_logger:info("Recipe for %s was provided by %s", name, k)
-            end
+            craft_logger:debug("Recipe. provider:%s,name:%s,count:%u,task_id:%s,job_id:%s", k, name, node.count, node.task_id, job_id)
+            craft_logger:info("Recipe for %s was provided by %s", name, k)
             break
           end
         end
         if not success then
-          error(("No recipe found for %s"):format(name))
+          error(("No recipe found for %s"):format(name), 0)
         end
         remaining = remaining - node.count
       end
@@ -392,11 +399,19 @@ init = function(loaded, config)
     if task.type == "ITEM" then
       deallocate_items(task.name, task.count)
     end
+    if task.parent then
+      remove_from_array(task.parent.children, task)
+    end
     assert(task.state == "DONE", "Attempt to delete not done task.")
     done_lookup[task.task_id] = nil
     assert(task.children == nil, "Attempt to delete task with children.")
   end
 
+
+  local node_state_logger = setmetatable({}, {__index=function () return function () end end})
+  if log then
+    node_state_logger = log.interface.logger("crafting", "node_state")
+  end
   ---Safely change a node to a new state
   ---Only modifies the node's state and related caches
   ---@param node CraftingNode
@@ -464,10 +479,24 @@ init = function(loaded, config)
     crafting_handlers[type] = func
   end
 
+  local function delete_node_children(node)
+    if not node.children then
+      return
+    end
+    for _,child in pairs(node.children) do
+      delete_task(child)
+    end
+    node.children = nil
+
+  end
+
   ---Update the state of the given node
   ---@param node CraftingNode
   function update_node_state(node)
     if not node.state then
+      if node.type == "ROOT" then
+        node.start_time = os.epoch("utc")
+      end
       -- This is an uninitialized node
       -- leaf -> set state to READY
       -- otherwise -> set state to WAITING
@@ -491,14 +520,13 @@ init = function(loaded, config)
         end
         if all_children_done then
           -- this is ready to be crafted
-          for _,child in pairs(node.children) do
-            delete_task(child)
-          end
-          node.children = nil
+          print("ready to be crafted", node.type, node.task_id)
+          delete_node_children(node)
           remove_from_array(waiting_queue, node)
           if node.type == "ROOT" then
             -- This task is the root of a job
             -- TODO some notification that the whole job is done!
+            node_state_logger:info("Finished job_id:%s in %.2fsec", node.job_id, (os.epoch("utc") - node.start_time) / 1000)
             node.state = "DONE"
             error("Job done!")
           end
@@ -514,11 +542,7 @@ init = function(loaded, config)
       assert(crafting_handlers[node.type], "No crafting_handler for type "..node.type)
       crafting_handlers[node.type](node)
     elseif node.state == "DONE" and node.children then
-      -- delete all the children
-      for k,v in pairs(node.children) do
-        delete_task(v)
-      end
-      node.children = {}
+      delete_node_children(node)
     end
   end
 
@@ -585,6 +609,7 @@ init = function(loaded, config)
   ---Safely cancel a task by ID
   ---@param task_id string
   local function cancel_task(task_id)
+    craft_logger:debug("Cancelling task %s", task_id)
     local task = task_lookup[task_id]
     if task.state then
       if task.state == "WAITING" then
@@ -603,6 +628,7 @@ init = function(loaded, config)
   ---Cancel a job by given id
   ---@param job_id any
   local function cancel_job(job_id)
+    craft_logger:info("Cancelling job %s", job_id)
     for k,v in pairs(job_lookup[job_id]) do
       cancel_task(v.task_id)
     end
@@ -650,14 +676,14 @@ init = function(loaded, config)
   local function request_craft(name, count)
     local job_id = id()
     job_lookup[job_id] = {}
+
+    craft_logger:debug("New job. name:%s,count:%u,job_id:%s", name, count, job_id)
+    craft_logger:info("Requested craft for %ux%s", count, name)
     local ok, job = pcall(_request_craft, name, count, job_id, true)
 
-    if log then
-      craft_logger:debug("New job. name:%s,count:%u,job_id:%s", name, count, job_id)
-      craft_logger:info("Requested craft for %ux%s", count, name)
-    end
-
     if not ok then
+      craft_logger:error("Creating job for %ux%s failed. %s. job_id:%s", count, name, job, job_id)
+      cancel_job(job_id)
       error(job) -- TODO
     end
 
@@ -665,8 +691,12 @@ init = function(loaded, config)
     local root = {
       job_id = job_id,
       children = job,
-      type = "ROOT"
+      type = "ROOT",
+      task_id = id(),
     }
+
+    table.insert(job_lookup[job_id], root)
+    task_lookup[root.task_id] = root
 
     -- TEMPORARY TODO REMOVE
     update_whole_tree(root)
@@ -714,7 +744,9 @@ init = function(loaded, config)
       push_items = push_items,
       add_crafting_handler = add_crafting_handler,
       add_ready_handler = add_ready_handler,
-      add_request_craft_type = add_request_craft_type
+      add_request_craft_type = add_request_craft_type,
+      delete_node_children = delete_node_children,
+      delete_task = delete_task
     }
   }
 end

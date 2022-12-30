@@ -103,8 +103,13 @@ local function write_banner()
   banner.write(state)
   term.setCursorPos(x,y)
 
+  local to_display = state
+  if not connected then
+    to_display = "!"..to_display
+  end
+
   os.setComputerLabel(
-    ("%s %s - %s"):format(get_activity_char(), network_name, state))
+    ("%s %s - %s"):format(get_activity_char(), network_name, to_display))
 end
 local function keep_alive()
   while true do

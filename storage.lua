@@ -28,9 +28,7 @@ local config = {}
 ---@type table array of module IDs in init order
 local moduleInitOrder = {}
 ---@type table [id] -> module return info
-local loaded = setmetatable({}, {__index = function (t,k)
-  error(("Attempt to access non-existant plugin %s"):format(k), 2)
-end})
+local loaded = {}
 for _,v in ipairs(modules) do
   ---@type module
   local mod = require(v)
@@ -91,7 +89,7 @@ for id, spec in pairs(config) do
 end
 
 local function saveConfig()
-  common.saveTableToFile("config.txt", config, false)
+  common.saveTableToFile("config.txt", config, false, true)
 end
 saveConfig()
 

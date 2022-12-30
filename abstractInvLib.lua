@@ -580,13 +580,11 @@ function abstractInventory(inventories, assumeLimits)
       while itemsPulled < amount do
         local freeSlot, freeInventory, space
         freeSlot, freeInventory, space = getEmptySpace()
-        print(freeSlot, freeInventory)
         if not (freeSlot and freeInventory) then
           return itemsPulled
         end
         local limit = math.min(amount - itemsPulled, space)
         cacheItem({name="UNKNOWN", count=math.huge}, freeInventory, freeSlot)
-        print(freeInventory, "pullItems", fromInventory, fromSlot, limit, freeSlot)
         local moved = peripheral.call(freeInventory, "pullItems", fromInventory, fromSlot, limit, freeSlot)
         cacheSlot(freeInventory, freeSlot)
         if options.itemMovedCallback then
@@ -926,7 +924,6 @@ function abstractInventory(inventories, assumeLimits)
     nbt = nbt or "NONE"
     if itemSpaceLUT[name] and itemSpaceLUT[name][nbt] then
       for _, cached in pairs(itemSpaceLUT[name][nbt]) do
-        print("item?")
         count = count + (cached.capacity - cached.item.count)
       end
     end
