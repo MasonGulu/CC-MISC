@@ -319,6 +319,58 @@ init = function(loaded,config)
   end
   crafting.add_ready_handler("CG", ready_handler)
 
+  local function json_type_handler(json)
+    local recipe = {}
+    local recipe_name
+    recipe.shaped = json.type == "minecraft:crafting_shaped"
+    recipe_name = json.result.item
+    recipe.produces = json.result.count or 1
+    if json.type == "minecraft:crafting_shapeless" then
+      recipe.recipe = {}
+      for k,v in pairs(json.ingredients) do
+        local name = v.item or v.tag
+        if not (name) then
+          local array = {}
+          for _, opt in pairs(v) do
+            name = opt.item or opt.tag
+            table.insert(array, crafting.get_or_cache_string(name,v.tag))
+          end
+          table.insert(recipe.recipe, array)
+        else
+          table.insert(recipe.recipe, crafting.get_or_cache_string(name,v.tag))
+        end
+      end
+    elseif json.type == "minecraft:crafting_shaped" then
+      ---@type table<string,integer|integer[]>
+      local keys = {[" "]=0}
+      for k,v in pairs(json.key) do
+        local name = v.item or v.tag
+        if not (name) then
+          local array = {}
+          for _, opt in pairs(v) do
+            name = opt.item or opt.tag
+            table.insert(array, crafting.get_or_cache_string(name,v.tag))
+          end
+          keys[k] = array
+        else
+          keys[k] = crafting.get_or_cache_string(name, v.tag)
+        end
+      end
+      recipe.recipe = {}
+      recipe.width = json.pattern[1]:len()
+      recipe.height = #json.pattern
+      for row, row_string in ipairs(json.pattern) do
+        for i = 1, row_string:len() do
+          table.insert(recipe.recipe, keys[row_string:sub(i,i)])
+        end
+      end
+    end
+    cache_additional(recipe)
+    grid_recipes[recipe_name] = recipe
+  end
+  crafting.add_json_type_handler("minecraft:crafting_shaped", json_type_handler)
+  crafting.add_json_type_handler("minecraft:crafting_shapeless", json_type_handler)
+
   local function crafting_handler(node)
     -- -- Check if the turtle's state is DONE
     -- local turtle = attached_turtles[node.turtle]

@@ -89,59 +89,17 @@ init = function(loaded, config)
     end
   end
 
+  local json_type_handlers = {}
+  ---Add a JSON type handler, this should load a recipe from the given JSON table
+  ---@param json_type string
+  ---@param handler fun(json: table)
+  local function add_json_type_handler(json_type, handler)
+    json_type_handlers[json_type] = handler
+  end
   local function load_json(json)
-    local recipe = {}
-    local recipe_name
-    if json.type == "minecraft:crafting_shapeless" then
-    elseif json.type == "minecraft:crafting_shaped" then
-      recipe.shaped = true
-    else
-      return -- not supported
+    if json_type_handlers[json.type] then
+      json_type_handlers[json.type](json)
     end
-    recipe_name = json.result.item
-    recipe.produces = json.result.count or 1
-    if json.type == "minecraft:crafting_shapeless" then
-      recipe.recipe = {}
-      for k,v in pairs(json.ingredients) do
-        local name = v.item or v.tag
-        if not (name) then
-          local array = {}
-          for _, opt in pairs(v) do
-            name = opt.item or opt.tag
-            table.insert(array, get_or_cache_string(name,v.tag))
-          end
-          table.insert(recipe.recipe, array)
-        else
-          table.insert(recipe.recipe, get_or_cache_string(name,v.tag))
-        end
-      end
-    elseif json.type == "minecraft:crafting_shaped" then
-      ---@type table<string,integer|integer[]>
-      local keys = {[" "]=0}
-      for k,v in pairs(json.key) do
-        local name = v.item or v.tag
-        if not (name) then
-          local array = {}
-          for _, opt in pairs(v) do
-            name = opt.item or opt.tag
-            table.insert(array, get_or_cache_string(name,v.tag))
-          end
-          keys[k] = array
-        else
-          keys[k] = get_or_cache_string(name, v.tag)
-        end
-      end
-      recipe.recipe = {}
-      recipe.width = json.pattern[1]:len()
-      recipe.height = #json.pattern
-      for row, row_string in ipairs(json.pattern) do
-        for i = 1, row_string:len() do
-          table.insert(recipe.recipe, keys[row_string:sub(i,i)])
-        end
-      end
-    end
-    cache_additional(recipe)
-    grid_recipes[recipe_name] = recipe
   end
 
   load_item_lookup()
@@ -708,30 +666,6 @@ init = function(loaded, config)
       parallel.waitForAny(tick_crafting, inventory_transfer_listener)
     end,
 
-    gui = function (frame)
-      frame:addLabel():setText("Drag and drop shaped/unshaped recipe JSONs")
-      frame:addButton():setText("Save"):onClick(function()
-        save_grid_recipes()
-        save_item_lookup()
-      end):setPosition(2,2):setSize("parent.w-2",1)
-      local list = frame:addList():setPosition(2,6):setSize("parent.w-2","parent.h-8")
-
-      --- file upload thread
-      frame:addThread():start(function()
-        while true do
-          local e, transfer = os.pullEvent("file_transfer")
-          for _,file in ipairs(transfer.getFiles()) do
-            local contents = file.readAll()
-            local json = textutils.unserialiseJSON(contents)
-            if json then
-              load_json(json)
-            end
-            file.close()
-          end
-        end
-      end)
-    end,
-
     request_craft = request_craft,
 
     recipeInterface = {
@@ -746,7 +680,9 @@ init = function(loaded, config)
       add_ready_handler = add_ready_handler,
       add_request_craft_type = add_request_craft_type,
       delete_node_children = delete_node_children,
-      delete_task = delete_task
+      delete_task = delete_task,
+      get_or_cache_string = get_or_cache_string,
+      add_json_type_handler = add_json_type_handler,
     }
   }
 end
