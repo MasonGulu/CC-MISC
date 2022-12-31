@@ -52,7 +52,7 @@ function lib.subscribe()
   storage("subscribe")
   while true do
     local _, id, message, protocol = os.pullEvent("rednet_message")
-    if protocol == PROTOCOL and type("message") == "table" and message.method == "update" then
+    if protocol == PROTOCOL and type(message) == "table" and message.method == "update" then
       os.queueEvent("update", message.value)
     end
   end
