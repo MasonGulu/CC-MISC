@@ -28,6 +28,55 @@ config = {
     default = true
   }
 },
+setup = function(moduleConfig)
+  local attachedInventories = {}
+  local function getAttachedInventoriesToModem(modem)
+    modem = peripheral.wrap(modem)
+    if not modem.isWireless() then return end
+    for _, v in ipairs(modem.getNamesRemote()) do
+      if peripheral.hasType(v, "inventory") then attachedInventories[#attachedInventories+1] = v end
+    end
+  end
+  for _, v in ipairs(peripheral.getNames()) do
+    if peripheral.hasType(v, "inventory") then attachedInventories[#attachedInventories+1] = v
+    elseif peripheral.hasType(v, "modem") then getAttachedInventoriesToModem(v) end
+  end
+  print("Your storage inventory list is not setup. How would you like to set that up?")
+  print("1) All inventories on the network")
+  print("2) Select Y/n on each inventory on the network")
+  print("3) Enter the list manually")
+  while true do
+    local _, char = os.pullEvent("char")
+    if char == "1" then
+      moduleConfig.inventories.value = attachedInventories
+      return
+    elseif char == "2" then
+      moduleConfig.inventories.value = {}
+      for k,v in pairs(attachedInventories) do
+        term.write(("%s(Y/n):"):format(v))
+        local input = io.read()
+        if input == "" then
+          input = "y"
+        end
+        if input:sub(1,1):lower() == "y" then
+          table.insert(moduleConfig.inventories.value, v)
+        end
+      end
+      return
+    elseif char == "3" then
+      while true do
+        print("Enter a table:")
+        local input = io.read()
+        local inputT = textutils.unserialise(input)
+        if inputT then
+          moduleConfig.inventories.value = inputT
+          return
+        end
+        print("Invalid table.")
+      end
+    end
+  end
+end,
 init = function(loaded, config)
   local log = loaded.logger
   local storage = require("abstractInvLib")(config.inventory.inventories.value)

@@ -8,9 +8,9 @@ local modules = {
   "modules.inventory",
   "modules.crafting",
   "modules.grid",
-  "modules.rednet",
+  -- "modules.rednet",
   -- "modules.gui",
-  -- "modules.tui"
+  "modules.tui"
 }
 
 -- A module should return a table that contains at least the following fields
@@ -81,9 +81,16 @@ for id, spec in pairs(config) do
     config[id][name].id = id
     config[id][name].name = name
     if type(config[id][name].value) ~= info.type then
-      print(("Config option %s.%s is invalid"):format(id, name, info.type))
-      print(config[id][name].description)
-      config[id][name].value = getValue(config[id][name].type)
+      if loaded[id].setup then
+        loaded[id].setup(config[id])
+        assert(type(config[id][name].value) == info.type,
+        ("Module %s setup failed to set %s"):format(id,name))
+        -- if a module has a first time setup defined, call it
+      else
+        print(("Config option %s.%s is invalid"):format(id, name, info.type))
+        print(config[id][name].description)
+        config[id][name].value = getValue(config[id][name].type)
+      end
     end
   end
 end
