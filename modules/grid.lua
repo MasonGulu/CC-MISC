@@ -381,7 +381,7 @@ init = function(loaded,config)
   crafting.add_crafting_handler("CG", crafting_handler)
   return {
     start = function()
-      loaded.crafting.interface.request_craft("minecraft:piston", 128)
+      -- loaded.crafting.interface.request_craft("minecraft:piston", 128)
       parallel.waitForAny(modem_manager, keep_alive)
     end
   }

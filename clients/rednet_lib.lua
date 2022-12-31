@@ -1,26 +1,24 @@
 local lib = {}
 
+peripheral.find("modem",rednet.open)
 local host
-local protocol = "STORAGE"
+local PROTOCOL = "STORAGE"
 ---Connect to the storage system
 function lib.connect()
-  host = assert(rednet.lookup(protocol), "Storage system is not on rednet.")
-end
-local function send_and_get_response(message)
-  rednet.send(host, message, protocol)
-  local from, message
-  while from ~= host do
-    from, message = rednet.receive(protocol)
-  end
-  return table.unpack(message)
+  host = assert(rednet.lookup(PROTOCOL), "Storage system is not on rednet.")
 end
 ---Call a method remotely on the storage module
 ---@param method string
 ---@param ... any
-function lib.storage(method, ...)
-  local message = {"inventory", method, ...}
-  print(textutils.serialise(message))
-  rednet.send(host, message, protocol)
+local function storage(method, ...)
+  local message = {method=method, args=table.pack(...)}
+  rednet.send(host, message, PROTOCOL)
+  while true do
+    local from, resp, protocol = rednet.receive(PROTOCOL)
+    if from == host and type(resp) == "table" and resp.method==method then
+      return resp.value
+    end
+  end
 end
 ---Pull items from an inventory
 ---@param fromInventory string|AbstractInventory
@@ -30,7 +28,35 @@ end
 ---@param nbt nil|string
 ---@param options nil|TransferOptions
 function lib.pullItems(fromInventory, fromSlot, amount, toSlot, nbt, options)
-  return lib.storage("pullItems", true, fromInventory, fromSlot, amount, toSlot, nbt, options)
+  return storage("pullItems",fromInventory, fromSlot, amount, toSlot, nbt, options)
+end
+
+---Push items to an inventory
+---@param targetInventory string
+---@param name string|number
+---@param amount nil|number
+---@param toSlot nil|number
+---@param nbt nil|string
+---@param options nil|TransferOptions
+function lib.pushItems(targetInventory, name, amount, toSlot, nbt, options)
+  return storage("pushItems",targetInventory, name, amount, toSlot, nbt, options)
+end
+
+---List inventory contents
+function lib.list()
+  return storage("list")
+end
+
+---Subscribe to transfers
+function lib.subscribe()
+  storage("subscribe")
+  while true do
+    local _, id, message, protocol = os.pullEvent("rednet_message")
+    if protocol == PROTOCOL and type("message") == "table" and message.method == "update" then
+      os.queueEvent("update", message.value)
+    end
+  end
+  storage("unsubscribe")
 end
 
 return lib

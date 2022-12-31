@@ -137,6 +137,7 @@ init = function(loaded, config)
       transferQueueDiffers = true
       parallel.waitForAll(table.unpack(transferExecution))
       storage.defrag()
+      os.queueEvent("inventoryUpdate", storage.list())
       if #transferQueue > 0 then
         performTransfer()
       end
