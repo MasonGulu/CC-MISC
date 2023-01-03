@@ -34,12 +34,15 @@ init=function (loaded,config)
     for _,name in pairs(names) do
       local nbts = loaded.inventory.interface.listNBT(name)
       for _,nbt in pairs(nbts) do
-        table.insert(list,{
-          name=name,
-          nbt=nbt,
-          count=loaded.inventory.interface.getCount(name,nbt),
-          displayName=loaded.inventory.interface.getItem(name,nbt).item.displayName
-        })
+        local item = loaded.inventory.interface.getItem(name,nbt).item
+        local item_clone = {}
+        for k,v in pairs(item) do
+          item_clone[k] = v
+        end
+        item_clone.name = name
+        item_clone.nbt = nbt
+        item_clone.count = loaded.inventory.interface.getCount(name,nbt)
+        table.insert(list,item_clone)
       end
     end
     return list

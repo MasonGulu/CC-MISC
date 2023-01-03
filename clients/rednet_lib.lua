@@ -49,14 +49,14 @@ end
 
 ---Subscribe to transfers
 function lib.subscribe()
-  storage("subscribe")
+  rednet.send(host, "subscribe", PROTOCOL)
   while true do
-    local _, id, message, protocol = os.pullEvent("rednet_message")
-    if protocol == PROTOCOL and type(message) == "table" and message.method == "update" then
+    local id, message = rednet.receive(PROTOCOL)
+    if type(message) == "table" and message.method == "update" then
+      error("rednet?")
       os.queueEvent("update", message.value)
     end
   end
-  storage("unsubscribe")
 end
 
 return lib
