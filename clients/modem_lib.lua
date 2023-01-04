@@ -97,6 +97,10 @@ function lib.list()
   return storage("list")
 end
 
+function lib.requestCraft(name,count)
+  return storage("requestCraft",name,count)
+end
+
 ---Subscribe to transfers
 function lib.subscribe()
   modem.open(update_port)

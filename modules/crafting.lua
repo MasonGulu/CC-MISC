@@ -98,7 +98,10 @@ init = function(loaded, config)
   end
   local function load_json(json)
     if json_type_handlers[json.type] then
+      print("Handling", json.type)
       json_type_handlers[json.type](json)
+    else
+      print("Skipping", json.type)
     end
   end
 
@@ -182,17 +185,34 @@ init = function(loaded, config)
     end
   end
 
-  local cached_stack_sizes = {} -- TODO
+  local cached_stack_sizes = {} -- TODO save this
   ---Get the maximum stacksize of an item by name
   ---@param name string
   local function get_stack_size(name)
-    return 64 -- TODO
+    if cached_stack_sizes[name] then
+      return cached_stack_sizes[name]
+    end
+    local item = loaded.inventory.interface.getItem(name)
+    cached_stack_sizes[name] = (item and item.item and item.item.maxCount) or 64
+    return cached_stack_sizes[name]
   end
 
   ---Get a psuedorandom uuid
   ---@return string
   local function id()
     return os.epoch("utc")..math.random(1,100000)..string.char(math.random(65,90))
+  end
+
+  ---@type table<string,string[]> tag -> item names
+  local cached_tag_lookup = {}
+  -- TODO load this
+  ---@type table<string,table<string,boolean>> tag -> item name -> is it in cached_tag_lookup
+  local cached_tag_presence = {}
+  for tag,names in pairs(cached_tag_lookup) do
+    cached_tag_presence[tag] = {}
+    for _, name in ipairs(names) do
+      cached_tag_presence[tag][name] = true
+    end
   end
 
   ---Select the best item from a tag
@@ -202,6 +222,25 @@ init = function(loaded, config)
     if config.crafting.tagLookup.value[tag] then
       return config.crafting.tagLookup.value[tag]
     end
+    if not cached_tag_presence[tag] then
+      cached_tag_presence[tag] = {}
+      cached_tag_lookup[tag] = {}
+    end
+    -- first check if we have anything
+    local items_with_tag = loaded.inventory.interface.getTag(tag)
+    local items_with_tag_count = {}
+    for k,v in ipairs(items_with_tag) do
+      if not cached_tag_presence[tag][v] then
+        cached_tag_presence[tag][v] = true
+        table.insert(cached_tag_lookup[tag], v)
+      end
+      items_with_tag_count[k] = {name=v, count=loaded.inventory.interface.getCount(v)}
+    end
+    table.sort(items_with_tag_count, function(a,b) return a.count > b.count end)
+    if items_with_tag_count[1] then
+      return items_with_tag_count[1].name
+    end
+    -- then check if we can craft anything (todo)
     error("Not yet implemented")
   end
 
@@ -485,8 +524,9 @@ init = function(loaded, config)
             -- This task is the root of a job
             -- TODO some notification that the whole job is done!
             node_state_logger:info("Finished job_id:%s in %.2fsec", node.job_id, (os.epoch("utc") - node.start_time) / 1000)
-            node.state = "DONE"
-            error("Job done!")
+            change_node_state(node, "DONE")
+            delete_task(node)
+            return
           end
           change_node_state(node, "READY")
         end
@@ -631,7 +671,7 @@ init = function(loaded, config)
   ---@param name string
   ---@param count integer
   ---@return CraftingNode root ROOT node
-  local function request_craft(name, count)
+  local function create_craft_job(name, count)
     local job_id = id()
     job_lookup[job_id] = {}
 
@@ -656,17 +696,40 @@ init = function(loaded, config)
     table.insert(job_lookup[job_id], root)
     task_lookup[root.task_id] = root
 
-    -- TEMPORARY TODO REMOVE
-    update_whole_tree(root)
     return root
+  end
+
+  ---Request and start a crafting job
+  ---@param name string
+  ---@param count integer
+  local function request_craft(name,count)
+    local root = create_craft_job(name,count)
+    update_whole_tree(root)
+    return root.job_id
+  end
+
+  local function json_file_import()
+    print("JSON file importing ready..")
+    while true do
+    local e, transfer = os.pullEvent("file_transfer")
+      for _,file in ipairs(transfer.getFiles()) do
+        local contents = file.readAll()
+        local json = textutils.unserialiseJSON(contents)
+        if json then
+          load_json(json)
+        end
+        file.close()
+      end
+    end
   end
 
   return {
     start = function()
-      parallel.waitForAny(tick_crafting, inventory_transfer_listener)
+      parallel.waitForAny(tick_crafting, inventory_transfer_listener, json_file_import)
     end,
 
     request_craft = request_craft,
+    load_json = load_json,
 
     recipeInterface = {
       change_node_state = change_node_state,

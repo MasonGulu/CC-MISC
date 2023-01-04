@@ -16,7 +16,7 @@ local modem = peripheral.getName(peripheral.find("modem"))
 lib.connect(modem)
 local self_name = peripheral.call(modem, "getNameLocal")
 
----@type "SEARCH"|"INFO"
+---@type "SEARCH"|"INFO"|"CRAFT"
 local mode = "SEARCH"
 
 local busy_slots = {} -- slots not to auto-import
@@ -63,10 +63,12 @@ local list = lib.list()
 
 
 local filter = ""
+local craft_name = ""
 local item_amount = ""
 local sifted_list = {}
 local selected_item = 1
-local selected_item_cache -- prevent the selected item from drifting while directly accessing it
+local display_item -- prevent the selected item from drifting while directly accessing it
+local requesting_craft = false -- set to true to make INFO enter request craft instead
 
 local function apply_sort()
   table.sort(list, function(a,b)
@@ -86,18 +88,15 @@ local function apply_sort()
   selected_item = math.min(selected_item, #sifted_list)
 end
 apply_sort()
-local function draw()
-  display.setVisible(false)
-  display.setCursorBlink(false)
-  display.clear()
-  if mode == "SEARCH" then
-    text(1,1,filter)
-    text(1,2,format_item("Name","Count"))
-    local screen_scroll = math.max(math.min(math.max(1,selected_item-5), #sifted_list-h+3), 1)
+local draw_modes = {
+  SEARCH = function ()
+    text(1,2,filter)
+    text(1,3,format_item("Name","Count"))
+    local screen_scroll = math.max(math.min(math.max(1,selected_item-5), #sifted_list-h+4), 1)
     for i=screen_scroll, math.min(screen_scroll+h, #sifted_list) do
       local item = sifted_list[i]
-      local y = 3 + i - screen_scroll
-      if y > 2 then
+      local y = 4 + i - screen_scroll
+      if y > 3 then
         if i == selected_item then
           set_colors(colors.black,colors.white)
         end
@@ -106,16 +105,33 @@ local function draw()
       end
     end
     display.setCursorBlink(true)
-    display.setCursorPos(filter:len()+1,1)
-  elseif mode == "INFO" then
-    local item = selected_item_cache
-    text(1,1,("%u x %s"):format(item.count,item.displayName))
-    text(1,2,item.name)
-    text(1,3,item.nbt)
+    display.setCursorPos(filter:len()+1,2)
+  end,
+  INFO = function ()
+    local item = display_item
+    text(1,2,("%u x %s"):format(item.count,item.displayName))
+    text(1,3,item.name)
+    text(1,4,item.nbt)
     text(1,h,("Withdraw: %s"):format(item_amount))
     display.setCursorBlink(true)
     display.setCursorPos(item_amount:len()+11,h)
+  end,
+  CRAFT = function ()
+    text(1,2,craft_name)
+    display.setCursorBlink(true)
+    display.setCursorPos(craft_name:len()+1,2)
   end
+}
+local function draw()
+  display.setVisible(false)
+  display.setCursorBlink(false)
+  display.clear()
+  set_colors(colors.black, colors.white)
+  display.setCursorPos(1,1)
+  display.clearLine()
+  display.write(mode)
+  set_colors(colors.white,colors.black)
+  assert(draw_modes[mode], "Missing draw_mode "..mode)()
   display.setVisible(true)
 end
 
@@ -127,20 +143,35 @@ local function event_update()
   end
 end
 
-local function handle_char(ch)
-  if mode == "SEARCH" then
+local char_modes = {
+  SEARCH = function (ch)
     filter = filter .. ch
     apply_sort()
-  elseif mode == "INFO" then
+  end,
+  INFO = function (ch)
     if ch >= '0' and ch <= '9' then
       item_amount = item_amount .. ch
     end
-  end
+  end,
+  CRAFT = function (ch)
+    craft_name = craft_name .. ch
+  end,
+}
+local function handle_char(ch)
+  assert(char_modes[mode], "Missing char_mode "..mode)(ch)
 end
 
 local function request_item(item,amount)
   amount = amount or 0
   if amount == 0 then
+    requesting_craft = false
+    return
+  end
+
+  if requesting_craft then
+    requesting_craft = false
+    lib.requestCraft(item.name,amount)
+    mode = "SEARCH"
     return
   end
   amount = math.min(amount, item.count)
@@ -162,8 +193,8 @@ local function request_item(item,amount)
   lib.pushItems(self_name,item.name,amount,nil,item.nbt)
 end
 
-local function handle_key(key)
-  if mode == "SEARCH" then
+local key_modes = {
+  SEARCH = function (key)
     if key == keys.backspace then
       filter = filter:sub(1, -2)
       apply_sort()
@@ -175,18 +206,35 @@ local function handle_key(key)
       if selected_item > 0 then
         mode = "INFO"
         -- this can easily become outdated if the contents of the storage change
-        selected_item_cache = sifted_list[selected_item]
-        item_amount = tostring(math.min(selected_item_cache.maxCount, selected_item_cache.count))
+        display_item = sifted_list[selected_item]
+        item_amount = tostring(math.min(display_item.maxCount, display_item.count))
       end
+    elseif key == keys.tab then
+      mode = "CRAFT"
     end
-  elseif mode == "INFO" then
+  end,
+  INFO = function (key)
     if key == keys.backspace then
       item_amount = item_amount:sub(1, -2)
     elseif key == keys.enter then
-      request_item(selected_item_cache,tonumber(item_amount or 0))
+      request_item(display_item,tonumber(item_amount or 0))
+      mode = "SEARCH"
+    end
+  end,
+  CRAFT = function (key)
+    if key == keys.backspace then
+      craft_name = craft_name:sub(1, -2)
+    elseif key == keys.enter then
+      mode = "INFO"
+      display_item = {name=craft_name, count = 10000} -- TODO
+      requesting_craft = true
+    elseif key == keys.tab then
       mode = "SEARCH"
     end
   end
+}
+local function handle_key(key)
+  assert(key_modes[mode], "Missing key_mode "..mode)(key)
 end
 
 local function input_handler()

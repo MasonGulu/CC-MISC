@@ -791,6 +791,7 @@ function abstractInventory(inventories, assumeLimits)
           local count = item.item.count
           cacheItem(nil, item.inventory, item.slot)
           while count > 0 do
+            print(name)
             local toItem = getSlotWithSpace(name, nbt)
             if toItem then
               local toMove = math.min(count, (toItem.item.maxCount or toItem.capacity) - toItem.item.count)

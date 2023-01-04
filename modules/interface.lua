@@ -55,6 +55,10 @@ init=function (loaded,config)
     -- todo list craftables
   end
 
+  function genericInterface.requestCraft(name, count)
+    loaded.crafting.interface.request_craft(name,count)
+  end
+
   local interface = {}
   local inventoryUpdateHandlers = {}
   ---Add a handler for the inventoryUpdate event
