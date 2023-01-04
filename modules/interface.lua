@@ -24,7 +24,7 @@ init=function (loaded,config)
   ---@param options nil|TransferOptions
   ---@return string transferId
   function genericInterface.pullItems(fromInventory, fromSlot, amount, toSlot, nbt, options)
-    return loaded.inventory.interface.pullItems(true,fromInventory, fromSlot, amount, toSlot, nbt, options)
+    return loaded.inventory.interface.pullItems(true, fromInventory, fromSlot, amount, toSlot, nbt, options)
   end
 
   ---List the items in this storage
@@ -75,7 +75,7 @@ init=function (loaded,config)
   function interface.callMethod(method, args)
     local desiredMethod = genericInterface[method]
     assert(desiredMethod, method.." is not a valid method")
-    return desiredMethod(table.unpack(args))
+    return desiredMethod(table.unpack(args, 1, args.n))
   end
   function interface.start()
     inventoryUpdateHandler()

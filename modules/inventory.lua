@@ -124,7 +124,7 @@ init = function(loaded, config)
       for _,v in pairs(transferQueueCopy) do
         local transfer = v
         table.insert(transferExecution, function ()
-          logger:debug("Transfer %s %s %s %s %s %s", table.unpack(transfer))
+          logger:debug("Transfer %s %s %s %s %s %s %s %s", table.unpack(transfer))
           local retVal = table.pack(pcall(function() return storage[transfer[2]](table.unpack(transfer,3,transfer.n)) end))
           if not retVal[1] then
             logger:error("Transfer %s %s failed with %s", transfer[1], transfer[2], retVal[2])

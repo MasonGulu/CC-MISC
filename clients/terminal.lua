@@ -1,6 +1,6 @@
 -- storage terminal turtle for the system
 local turtle_inventory = {}
-local lib = require("rednet_lib")
+local lib = require("modem_lib")
 local function refresh_turtle_inventory()
   local f = {}
   for i = 1, 16 do
@@ -13,8 +13,7 @@ local function refresh_turtle_inventory()
 end
 
 local modem = peripheral.getName(peripheral.find("modem"))
-rednet.open(modem)
-lib.connect()
+lib.connect(modem)
 local self_name = peripheral.call(modem, "getNameLocal")
 
 ---@type "SEARCH"|"INFO"
@@ -140,9 +139,11 @@ local function handle_char(ch)
 end
 
 local function request_item(item,amount)
+  amount = amount or 0
   if amount == 0 then
     return
   end
+  amount = math.min(amount, item.count)
   local stacks = math.min(math.ceil(amount / item.maxCount),16)
   local free_slots = {}
   for i = 1, 16 do
@@ -154,6 +155,7 @@ local function request_item(item,amount)
   end
   for i = 1, stacks do
     local slot = next(free_slots)
+    if not slot then break end -- not enough space in the turtle to fit all of the items
     busy_slots[slot] = true
     free_slots[slot] = nil
   end

@@ -13,6 +13,11 @@ config = {
   }
 },
 init = function(loaded, config)
+  local log = loaded.logger
+  local logger = setmetatable({}, {__index=function () return function () end end})
+  if log then
+    logger = log.interface.logger("rednet","main")
+  end
   local interface = {}
   assert(loaded.interface, "rednet requires interface to be loaded")
   local modem = assert(peripheral.wrap(config.rednet.modem.value), "Invalid modem provided.")
