@@ -76,6 +76,19 @@ function abstractInventory(inventories, assumeLimits)
   local tagLUT = {}
   -- [tag] -> string[]
 
+  local executeLimit = 10 -- limit of functions to run in parallel
+
+  ---Execute a table of functions in batches
+  ---@param func function[]
+  local function batchExecute(func)
+    local batches = math.ceil(#func / executeLimit)
+    for batch = 1, batches do
+      local start = ((batch - 1) * executeLimit) + 1
+      local batch_end = math.min(start + executeLimit - 1, #func)
+      parallel.waitForAll(table.unpack(func, start, batch_end))
+    end
+  end
+
 
   local function ate(table, item) -- add to end
     table[#table+1] = item
@@ -160,7 +173,7 @@ function abstractInventory(inventories, assumeLimits)
         -- There's an item in this slot, therefor this slot is not empty
         emptySlotLUT[inventory][slot] = nil
       end
-      if item.count < item.maxCount then
+      if item.count < (item.maxCount or cachedItem.capacity) then
         -- There's space left in this slot, add it to the cache
         itemSpaceLUT[item.name] = itemSpaceLUT[item.name] or {}
         itemSpaceLUT[item.name][nbt] = itemSpaceLUT[item.name][nbt] or {}
@@ -221,7 +234,7 @@ function abstractInventory(inventories, assumeLimits)
       end
     end
     if deep then
-      parallel.waitForAll(table.unpack(deepCacheFunctions))
+      batchExecute(deepCacheFunctions)
     end
   end
 
@@ -524,7 +537,7 @@ function abstractInventory(inventories, assumeLimits)
       end
       -- execute the inventory transfers
       -- return amount of items moved
-      parallel.waitForAll(table.unpack(transferCache))
+      batchExecute(transferCache)
       if badTransfer then
         -- refresh inventories
         api.refreshStorage(options.autoDeepRefresh)
@@ -696,7 +709,7 @@ function abstractInventory(inventories, assumeLimits)
 
       end
 
-      parallel.waitForAll(table.unpack(transferCache))
+      batchExecute(transferCache)
       if badTransfer then
         -- refresh inventories
         api.refreshStorage(options.autoDeepRefresh)
@@ -780,7 +793,7 @@ function abstractInventory(inventories, assumeLimits)
           while count > 0 do
             local toItem = getSlotWithSpace(name, nbt)
             if toItem then
-              local toMove = math.min(count, toItem.capacity - toItem.item.count)
+              local toMove = math.min(count, (toItem.item.maxCount or toItem.capacity) - toItem.item.count)
               toItem.item.count = toItem.item.count + toMove
               cacheItem(toItem, toItem.inventory, toItem.slot)
               peripheral.call(item.inventory, "pushItems", toItem.inventory, item.slot, toMove, toItem.slot)
@@ -795,7 +808,7 @@ function abstractInventory(inventories, assumeLimits)
         end
       end)
     end
-    parallel.waitForAll(table.unpack(f))
+    batchExecute(f)
     api.refreshStorage(true) -- this messes with the cache in some way I currently cannot figure out.
   end
 
