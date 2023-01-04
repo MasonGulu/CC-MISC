@@ -160,7 +160,7 @@ function abstractInventory(inventories, assumeLimits)
         -- There's an item in this slot, therefor this slot is not empty
         emptySlotLUT[inventory][slot] = nil
       end
-      if item.count < cachedItem.capacity then
+      if item.count < item.maxCount then
         -- There's space left in this slot, add it to the cache
         itemSpaceLUT[item.name] = itemSpaceLUT[item.name] or {}
         itemSpaceLUT[item.name][nbt] = itemSpaceLUT[item.name][nbt] or {}
