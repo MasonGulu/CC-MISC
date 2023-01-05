@@ -1,9 +1,3 @@
 /.cache
-/opengpt.lua
-test.dump
-test.out
 log.txt
-flat_task_lookup.txt
-fuse.lua
-fusetest.lua
-treefarm*.lua
+config.txt
