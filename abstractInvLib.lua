@@ -213,7 +213,8 @@ function abstractInventory(inventories, assumeLimits)
     local deepCacheFunctions = {}
     for _, inventory in pairs(inventories) do
       emptySlotLUT[inventory] = {}
-      for i = 1, peripheral.call(inventory, "size") do
+      local size = assert(peripheral.call(inventory, "size"), ("%s is not a valid inventory."):format(inventory))
+      for i = 1, size do
         emptySlotLUT[inventory][i] = true
         local slotnumber = #slotNumberLUT+1
         slotNumberLUT[slotnumber] = {inventory=inventory, slot=i}
