@@ -60,17 +60,30 @@ init = function(loaded, config)
   -- This function is optional, if present this will be executed in parallel with all other modules.
   function interface.start = function() end
 
-  function interface
   return interface
 end
 }
 ```
 
-The PLAN
-* Module for importing/exporting items
-* Split the crafting module into several peices
-  * Craft scheduler
-  * Grid recipe handler
-  * Machine recipe handler
-* Generic protocol module
-  * Interfaces with modules that actually handle the communication i.e. Rednet, modem, encrypted rednet?
+### Module environment
+Modules are loaded using `require`, the table they return are placed into `modules[id]`.
+Everything initially returned by the module should be stateless, all state is achieved by providing the `init` function.
+To enable inter-module communication the value returned by the `init` function is placed into `modules[id].interface`.
+
+There is one module that is artificially provided by `storage.lua`, there are various config functions located at `modules.config.interface`.
+
+### Config environment
+Whenever a module has `config` defined as a table, that table is placed into the config environment at `config[id]`. 
+Then after all modules are loaded the config file is loaded, and all config options are verified before the initialization stage begins.
+Each config options's value is then stored at `value`.
+
+### Module load stages
+There are multiple stages in module loading. Loading, config loading, initializing, and executing.
+
+The first thing done is to load each module, all that happens here is each module is `require`'d and stuck into the `modules` table
+
+The second thing done is to load and validate the config.
+
+Then each module's `init` function is called, and anything returned is placed into the `interface` key.
+
+Then to conclude each module that provided a `start` function in the `interface` is called in parallel.
