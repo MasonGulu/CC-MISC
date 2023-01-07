@@ -862,7 +862,7 @@ function abstractInventory(inventories, assumeLimits)
   ---@return string[]
   function api.getTag(tag)
     local t = {}
-    for k,v in pairs(tagLUT[tag]) do
+    for k,v in pairs(tagLUT[tag] or {}) do
       table.insert(t,k)
     end
     return t

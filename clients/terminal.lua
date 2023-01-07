@@ -214,13 +214,13 @@ local draw_modes = {
     end
     text(1,line,"To use:")
     line = line + 1
-    for k,v in pairs(craftInfo.to_use) do
+    for k,v in pairs(craftInfo.toUse) do
       text(1,line,("%ux%s"):format(v,k))
       line = line + 1
     end
     text(1,line,"To craft:")
     line = line + 1
-    for k,v in pairs(craftInfo.to_craft) do
+    for k,v in pairs(craftInfo.toCraft) do
       text(1,line,("%ux%s"):format(v,k))
       line = line + 1
     end

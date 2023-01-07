@@ -738,15 +738,14 @@ init = function(loaded, config)
     ret.toUse = {}
     ret.missing = {}
     ret.jobId = root.jobId
-    runOnAll(root, function()
-      if root.type == "ITEM" then
-        ret.toUse[root.name] = (ret.toUse[root.name] or 0) + root.count
-        print("item", ret.toUse[root.name])
-      elseif root.type == "MISSING" then
+    runOnAll(root, function(node)
+      if node.type == "ITEM" then
+        ret.toUse[node.name] = (ret.toUse[node.name] or 0) + node.count
+      elseif node.type == "MISSING" then
         ret.success = false
-        ret.missing[root.name] = (ret.missing[root.name] or 0) + root.count
-      elseif root.type ~= "ROOT" then
-        ret.toCraft[root.name] = (ret.toCraft[root.name] or 0) + (root.count or 0)
+        ret.missing[node.name] = (ret.missing[node.name] or 0) + node.count
+      elseif node.type ~= "ROOT" then
+        ret.toCraft[node.name] = (ret.toCraft[node.name] or 0) + (node.count or 0)
       end
     end)
     return ret
