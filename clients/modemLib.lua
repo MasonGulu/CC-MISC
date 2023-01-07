@@ -3,18 +3,18 @@ local lib = {}
 local modem
 local name
 
-local host_port = 50
-local update_port = 51
-local resp_port = 50
+local hostPort = 50
+local updatePort = 51
+local respPort = 50
 local timeout = 3000
 
-local function validate_message(message)
+local function validateMessage(message)
   local valid = type(message) == "table" and message.protocol ~= nil
   valid = valid and (message.destination == name or message.destination == "*")
   valid = valid and message.source ~= nil
   return valid
 end
-local function get_modem_message(filter, timeout)
+local function getModemMessage(filter, timeout)
   local timer
   if timeout then
     timer = os.startTimer(timeout)
@@ -41,7 +41,7 @@ end
 ---Connect to the storage system
 function lib.connect(modem_name)
   modem = assert(peripheral.wrap(modem_name), "Invalid modem.")
-  modem.open(resp_port)
+  modem.open(respPort)
   name = modem.getNameLocal()
 end
 ---Call an interface method remotely
@@ -55,17 +55,17 @@ local function interface(method, ...)
     source = name,
     destination = "HOST"
   }
-  modem.transmit(host_port, resp_port, message)
-  local wait_start = os.epoch("utc")
+  modem.transmit(hostPort, respPort, message)
+  local waitStart = os.epoch("utc")
   while true do
-    local event = get_modem_message(validate_message, 2)
+    local event = getModemMessage(validateMessage, 2)
     if event then
       message = event.message
       if message.protocol == "storage_system_modem" and message.method == method then
         return table.unpack(message.response)
       end
     end
-    if wait_start + timeout < os.epoch("utc") then
+    if waitStart + timeout < os.epoch("utc") then
       error("Response timed out.", 2)
     end
   end
@@ -105,9 +105,9 @@ end
 
 ---Subscribe to transfers
 function lib.subscribe()
-  modem.open(update_port)
+  modem.open(updatePort)
   while true do
-    local event = get_modem_message(validate_message)
+    local event = getModemMessage(validateMessage)
     assert(event, "Got no event")
     if event.message.protocol == "storage_system_update" then
       os.queueEvent("update", event.message.list)

@@ -4,7 +4,7 @@ local modem = peripheral.find("modem", function(name, modem)
   return true
 end)
 rednet.open(peripheral.getName(modem))
-local network_name = modem.getNameLocal()
+local networkName = modem.getNameLocal()
 ---@enum State
 local STATES = {
   READY = "READY",
@@ -16,36 +16,36 @@ local STATES = {
 local state = STATES.READY
 local connected = false
 local port = 121
-local keep_alive_timeout = 10
+local keepAliveTimeout = 10
 local w,h = term.getSize()
 local banner = window.create(term.current(), 1, 1, w, 1)
 local panel = window.create(term.current(),1,2,w,h-1)
 
-local last_state_change = os.epoch("utc")
+local lastStateChange = os.epoch("utc")
 
-local turtle_inventory = {}
-local function refresh_turtle_inventory()
+local turtleInventory = {}
+local function refreshTurtleInventory()
   local f = {}
   for i = 1, 16 do
     f[i] = function()
-      turtle_inventory[i] = turtle.getItemDetail(i, true)
+      turtleInventory[i] = turtle.getItemDetail(i, true)
     end
   end
   parallel.waitForAll(table.unpack(f))
-  return turtle_inventory
+  return turtleInventory
 end
 ---@type CraftingNode 
 local task
 term.redirect(panel)
 
 modem.open(port)
-local function validate_message(message)
+local function validateMessage(message)
   local valid = type(message) == "table" and message.protocol ~= nil
-  valid = valid and (message.destination == network_name or message.destination == "*")
+  valid = valid and (message.destination == networkName or message.destination == "*")
   valid = valid and message.source ~= nil
   return valid
 end
-local function get_modem_message(filter, timeout)
+local function getModemMessage(filter, timeout)
   local timer
   if timeout then
     timer = os.startTimer(timeout)
@@ -69,8 +69,8 @@ local function get_modem_message(filter, timeout)
     end
   end
 end
-local last_char = "|"
-local char_state_lookup = {
+local lastChar = "|"
+local charStateLookup = {
   ["|"] = "/",
   ["/"] = "-",
   ["-"] = "\\",
@@ -79,13 +79,13 @@ local char_state_lookup = {
 local last_char_update = os.epoch("utc")
 local function get_activity_char()
   if os.epoch("utc") - last_char_update < 50 then
-    return last_char
+    return lastChar
   end
   last_char_update = os.epoch("utc")
-  last_char = char_state_lookup[last_char]
-  return last_char
+  lastChar = charStateLookup[lastChar]
+  return lastChar
 end
-local function write_banner()
+local function writeBanner()
   local x, y = term.getCursorPos()
 
   banner.setBackgroundColor(colors.gray)
@@ -109,111 +109,111 @@ local function write_banner()
   end
 
   os.setComputerLabel(
-    ("%s %s - %s"):format(get_activity_char(), network_name, to_display))
+    ("%s %s - %s"):format(get_activity_char(), networkName, to_display))
 end
-local function keep_alive()
+local function keepAlive()
   while true do
-    local modem_message = get_modem_message(function(message)
-      return validate_message(message) and message.protocol == "KEEP_ALIVE"
-    end, keep_alive_timeout)
+    local modem_message = getModemMessage(function(message)
+      return validateMessage(message) and message.protocol == "KEEP_ALIVE"
+    end, keepAliveTimeout)
     connected = modem_message ~= nil
     if modem_message then
       modem.transmit(port, port, {
         protocol = "KEEP_ALIVE",
         state = state,
-        source = network_name,
+        source = networkName,
         destination = "HOST",
       })
     end
-    write_banner()
+    writeBanner()
   end
 end
-local function col_write(fg, text)
+local function colWrite(fg, text)
   local old_fg = term.getTextColor()
   term.setTextColor(fg)
   term.write(text)
   term.setTextColor(old_fg)
 end
 
----@param new_state State
-local function change_state(new_state)
-  if state ~= new_state then
-    last_state_change = os.epoch("utc")
+---@param newState State
+local function changeState(newState)
+  if state ~= newState then
+    lastStateChange = os.epoch("utc")
   end
-  state = new_state
-  local item_slots = {}
-  for i, _ in pairs(turtle_inventory) do
-    table.insert(item_slots, i)
+  state = newState
+  local itemSlots = {}
+  for i, _ in pairs(turtleInventory) do
+    table.insert(itemSlots, i)
   end
   modem.transmit(port, port, {
     protocol = "KEEP_ALIVE",
     state = state,
-    source = network_name,
+    source = networkName,
     destination = "HOST",
-    item_slots = item_slots,
+    itemSlots = itemSlots,
   })
-  write_banner()
+  writeBanner()
 end
 
-local function get_item_slots()
-  refresh_turtle_inventory()
-  local item_slots = {}
-  for i, _ in pairs(turtle_inventory) do
-    table.insert(item_slots, i)
+local function getItemSlots()
+  refreshTurtleInventory()
+  local itemSlots = {}
+  for i, _ in pairs(turtleInventory) do
+    table.insert(itemSlots, i)
   end
-  return item_slots
+  return itemSlots
 
 end
 
 local function empty()
-  local item_slots = get_item_slots()
+  local itemSlots = getItemSlots()
   repeat
     modem.transmit(port, port, {
       protocol = "EMPTY",
       destination = "HOST",
-      source = network_name,
-      item_slots = item_slots
+      source = networkName,
+      itemSlots = itemSlots
     })
-    item_slots = get_item_slots()
+    itemSlots = getItemSlots()
     os.sleep(3)
     -- this delay needs to be high enough
     -- to allow the inventory system to
     -- actually perform the transfers
-  until #item_slots == 0
+  until #itemSlots == 0
 end
 
-local function signal_done()
-  local item_slots = get_item_slots()
-  change_state(STATES.DONE)
+local function signalDone()
+  local itemSlots = getItemSlots()
+  changeState(STATES.DONE)
   modem.transmit(port, port, {
     protocol = "CRAFTING_DONE",
     destination = "HOST",
-    source = network_name,
-    item_slots = item_slots,
+    source = networkName,
+    itemSlots = itemSlots,
   })
 end
 
-local function try_to_craft()
-  local ready_to_craft = true
+local function tryToCraft()
+  local readyToCraft = true
   for slot,v in pairs(task.plan) do
     local x = (slot-1) % (task.width or 3) + 1
     local y = math.floor((slot-1) / (task.height or 3))
-    local turtle_slot = y * 4 + x
-    ready_to_craft = ready_to_craft and turtle_inventory[turtle_slot]
-    if not ready_to_craft then
+    local turtleSlot = y * 4 + x
+    readyToCraft = readyToCraft and turtleInventory[turtleSlot]
+    if not readyToCraft then
       break
     else
-      ready_to_craft = ready_to_craft and turtle_inventory[turtle_slot].count == v.count
-      local error_free = turtle_inventory[turtle_slot].name == v.name
+      readyToCraft = readyToCraft and turtleInventory[turtleSlot].count == v.count
+      local error_free = turtleInventory[turtleSlot].name == v.name
       if not error_free then
         state = STATES.ERROR
         return
       end
     end
   end
-  if ready_to_craft then
+  if readyToCraft then
     turtle.craft()
-    signal_done()
+    signalDone()
   end
 end
 
@@ -221,15 +221,15 @@ end
 local protocols = {
   CRAFT = function (message)
     task = message.task
-    change_state(STATES.CRAFTING)
-    try_to_craft()
+    changeState(STATES.CRAFTING)
+    tryToCraft()
   end
 }
 
 local interface
-local function modem_interface()
+local function modemInterface()
   while true do
-    local event = get_modem_message(validate_message)
+    local event = getModemMessage(validateMessage)
     assert(event, "Got no message?")
     if protocols[event.message.protocol] then
       protocols[event.message.protocol](event.message)
@@ -237,36 +237,36 @@ local function modem_interface()
   end
 end
 
-local function turtle_inventory_event()
+local function turtleInventoryEvent()
   while true do
     os.pullEvent("turtle_inventory")
-    refresh_turtle_inventory()
+    refreshTurtleInventory()
     if state == STATES.CRAFTING then
-      try_to_craft()
+      tryToCraft()
     elseif state == STATES.DONE then
       -- check if the items have been removed from the inventory
-      refresh_turtle_inventory()
-      local empty_inv = not next(turtle_inventory)
+      refreshTurtleInventory()
+      local empty_inv = not next(turtleInventory)
       if empty_inv then
-        change_state(STATES.READY)
+        changeState(STATES.READY)
       end
     end
   end
 end
-local interface_lut
-interface_lut = {
+local interfaceLUT
+interfaceLUT = {
   help = function()
     local maxw = 0
-    local command_list = {}
-    for k,v in pairs(interface_lut) do
+    local commandList = {}
+    for k,v in pairs(interfaceLUT) do
       maxw = math.max(maxw, k:len()+1)
-      table.insert(command_list, k)
+      table.insert(commandList, k)
     end
-    local element_w = math.floor(w / maxw)
-    local format_str = "%"..maxw.."s"
-    for i,v in ipairs(command_list) do
-      term.write(format_str:format(v))
-      if (i + 1) % element_w == 0 then
+    local elementW = math.floor(w / maxw)
+    local formatStr = "%"..maxw.."s"
+    for i,v in ipairs(commandList) do
+      term.write(formatStr:format(v))
+      if (i + 1) % elementW == 0 then
         print()
       end
     end
@@ -277,7 +277,7 @@ interface_lut = {
     term.setCursorPos(1,1)
   end,
   info = function()
-    print(("Local network name: %s"):format(network_name))
+    print(("Local network name: %s"):format(networkName))
   end,
   cinfo = function()
     if state == STATES.CRAFTING then
@@ -294,46 +294,46 @@ interface_lut = {
 function interface()
   print("Crafting turtle indev")
   while true do
-    col_write(colors.cyan, "] ")
+    colWrite(colors.cyan, "] ")
     local input = io.read()
-    if interface_lut[input] then
-      interface_lut[input]()
+    if interfaceLUT[input] then
+      interfaceLUT[input]()
     else
-      col_write(colors.red, "Invalid command.")
+      colWrite(colors.red, "Invalid command.")
       print()
     end
   end
 end
 
 local retries = 0
-local function error_checker()
+local function errorChecker()
   while true do
-    if os.epoch("utc") - last_state_change > 10000 then
-      last_state_change = os.epoch("utc")
+    if os.epoch("utc") - lastStateChange > 10000 then
+      lastStateChange = os.epoch("utc")
       if state == STATES.DONE then
-        signal_done()
+        signalDone()
         retries = retries + 1
         if retries > 2 then
           print("Done too long")
-          change_state(STATES.ERROR)
+          changeState(STATES.ERROR)
         end
       elseif state == STATES.CRAFTING then
         retries = retries + 1
         if retries > 2 then
           print("Crafting too long")
-          change_state(STATES.ERROR)
+          changeState(STATES.ERROR)
         end
       else
         retries = 0
       end
     end
     os.sleep(1)
-    write_banner()
+    writeBanner()
   end
 end
 
-write_banner()
-local ok, err = pcall(parallel.waitForAny, interface, keep_alive, modem_interface, turtle_inventory_event, error_checker)
+writeBanner()
+local ok, err = pcall(parallel.waitForAny, interface, keepAlive, modemInterface, turtleInventoryEvent, errorChecker)
 
-os.setComputerLabel(("X %s - %s"):format(network_name, "OFFLINE"))
+os.setComputerLabel(("X %s - %s"):format(networkName, "OFFLINE"))
 error(err)
