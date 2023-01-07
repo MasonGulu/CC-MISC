@@ -765,7 +765,7 @@ init = function(loaded, config)
   ---@param jobId JobId
   ---@return boolean success
   local function startCraft(jobId)
-    craftLogger:debug("Start craft called for job ID %u", jobId)
+    craftLogger:debug("Start craft called for job ID %s", jobId)
     local job = pendingJobs[jobId]
     if not job then
       return false
