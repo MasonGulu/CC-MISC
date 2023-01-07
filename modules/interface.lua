@@ -4,6 +4,7 @@ version="INDEV",
 init=function (loaded,config)
   local genericInterface = {}
   ---Push items to an inventory
+  ---@param async boolean
   ---@param targetInventory string
   ---@param name string|number
   ---@param amount nil|number
@@ -11,11 +12,12 @@ init=function (loaded,config)
   ---@param nbt nil|string
   ---@param options nil|TransferOptions
   ---@return string transferId
-  function genericInterface.pushItems(targetInventory, name, amount, toSlot, nbt, options)
-    return loaded.inventory.interface.pushItems(true,targetInventory,name,amount,toSlot,nbt,options)
+  function genericInterface.pushItems(async,targetInventory, name, amount, toSlot, nbt, options)
+    return loaded.inventory.interface.pushItems(async,targetInventory,name,amount,toSlot,nbt,options)
   end
 
   ---Pull items from an inventory
+  ---@param async boolean
   ---@param fromInventory string|AbstractInventory
   ---@param fromSlot string|number
   ---@param amount nil|number
@@ -23,8 +25,8 @@ init=function (loaded,config)
   ---@param nbt nil|string
   ---@param options nil|TransferOptions
   ---@return string transferId
-  function genericInterface.pullItems(fromInventory, fromSlot, amount, toSlot, nbt, options)
-    return loaded.inventory.interface.pullItems(true, fromInventory, fromSlot, amount, toSlot, nbt, options)
+  function genericInterface.pullItems(async,fromInventory, fromSlot, amount, toSlot, nbt, options)
+    return loaded.inventory.interface.pullItems(async, fromInventory, fromSlot, amount, toSlot, nbt, options)
   end
 
   ---List the items in this storage
@@ -34,29 +36,45 @@ init=function (loaded,config)
     for _,name in pairs(names) do
       local nbts = loaded.inventory.interface.listNBT(name)
       for _,nbt in pairs(nbts) do
-        local item = loaded.inventory.interface.getItem(name,nbt).item
-        local item_clone = {}
-        for k,v in pairs(item) do
-          item_clone[k] = v
+        local item = loaded.inventory.interface.getItem(name,nbt)
+        if item then
+          item = item.item
+          local item_clone = {}
+          for k,v in pairs(item) do
+            item_clone[k] = v
+          end
+          item_clone.name = name
+          item_clone.nbt = nbt
+          item_clone.count = loaded.inventory.interface.getCount(name,nbt)
+          table.insert(list,item_clone)
         end
-        item_clone.name = name
-        item_clone.nbt = nbt
-        item_clone.count = loaded.inventory.interface.getCount(name,nbt)
-        table.insert(list,item_clone)
       end
     end
     return list
   end
 
-  function genericInterface.listCraftable()
+  ---Flush the transfer queue immediately
+  function genericInterface.performTransfer()
+    loaded.inventory.interface.performTransfer()
+  end
+
+  function genericInterface.listCraftables()
     if not loaded.crafting then
       return {}
     end
-    -- todo list craftables
+    return loaded.crafting.interface.list_craftables()
   end
 
   function genericInterface.requestCraft(name, count)
-    loaded.crafting.interface.request_craft(name,count)
+    return loaded.crafting.interface.request_craft(name,count)
+  end
+
+  function genericInterface.startCraft(jobID)
+    return loaded.crafting.interface.start_craft(jobID)
+  end
+
+  function genericInterface.cancelCraft(jobID)
+    return loaded.crafting.interface.cancel_craft(jobID)
   end
 
   local interface = {}

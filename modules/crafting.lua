@@ -1,10 +1,3 @@
-local STATES = {
-  READY = "READY",
-  ERROR = "ERROR",
-  BUSY = "BUSY",
-  CRAFTING = "CRAFTING",
-}
-
 local common = require("common")
 return {
 id = "crafting",
@@ -31,6 +24,7 @@ init = function(loaded, config)
   local item_name_lookup = {}
 
 
+  ---Get the index of a string or tag, creating one if one doesn't exist already
   ---@param str string
   ---@param tag boolean|nil
   ---@return ItemIndex
@@ -89,6 +83,10 @@ init = function(loaded, config)
     end
   end
 
+  local json_logger = setmetatable({}, {__index=function () return function () end end})
+  if log then
+    json_logger = log.interface.logger("crafting","json_importing")
+  end
   local json_type_handlers = {}
   ---Add a JSON type handler, this should load a recipe from the given JSON table
   ---@param json_type string
@@ -99,8 +97,10 @@ init = function(loaded, config)
   local function load_json(json)
     if json_type_handlers[json.type] then
       print("Handling", json.type)
+      json_logger:info("Importing JSON of type %s", json.type)
       json_type_handlers[json.type](json)
     else
+      json_logger:info("Skipping JSON of type %s, no handler available", json.type)
       print("Skipping", json.type)
     end
   end
@@ -108,6 +108,7 @@ init = function(loaded, config)
   load_item_lookup()
 
   ---@alias taskID string uuid foriegn key
+  ---@alias jobID string
 
   ---@type CraftingNode[] tasks that have unmet dependencies
   local waiting_queue = {}
@@ -122,7 +123,7 @@ init = function(loaded, config)
   ---@type table<string,CraftingNode>
   local transfer_id_task_lut = {}
 
-  local update_node_state, change_node_state, delete_task
+  local tick_node, change_node_state, delete_task
 
   --- ITEM - this node represents a quantity of items from the network
   --- ROOT - this node represents the root of a crafting task
@@ -132,7 +133,7 @@ init = function(loaded, config)
   ---@class CraftingNode
   ---@field children CraftingNode[]|nil
   ---@field parent CraftingNode|nil
-  ---@field type "ITEM" | "ROOT"
+  ---@field type "ITEM" | "ROOT" | "MISSING"
   ---@field name string
   ---@field count integer amount of this item to produce
   ---@field task_id string
@@ -172,20 +173,8 @@ init = function(loaded, config)
     return amount
   end
 
-  ---Convert a string LUT id into a specific item name, favoring items we have
-  ---@param id any
-  local function get_name(id)
-    if type(id) == "number" then
-      local str, tag = item_lookup[id][1], item_lookup[id].tag
-      if tag then
-        error("TODO")
-      else
-        return str
-      end
-    end
-  end
-
   local cached_stack_sizes = {} -- TODO save this
+
   ---Get the maximum stacksize of an item by name
   ---@param name string
   local function get_stack_size(name)
@@ -203,6 +192,25 @@ init = function(loaded, config)
     return os.epoch("utc")..math.random(1,100000)..string.char(math.random(65,90))
   end
 
+  ---@type table<string,string[]>
+  local craftable_lists = {}
+  ---Set the table of craftable items for a given id
+  ---@param id string ID of crafting module/type
+  ---@param list string[] table of craftable item names, assigned by reference
+  local function add_craftable_list(id, list)
+    craftable_lists[id] = list
+  end
+
+  local function list_craftables()
+    local l = {}
+    for k, v in pairs(craftable_lists) do
+      for i, s in ipairs(v) do
+        table.insert(l, s)
+      end
+    end
+    return l
+  end
+
   ---@type table<string,string[]> tag -> item names
   local cached_tag_lookup = {}
   -- TODO load this
@@ -217,7 +225,7 @@ init = function(loaded, config)
 
   ---Select the best item from a tag
   ---@param tag string
-  ---@return string name
+  ---@return string item_name
   local function select_best_from_tag(tag)
     if config.crafting.tagLookup.value[tag] then
       return config.crafting.tagLookup.value[tag]
@@ -245,8 +253,8 @@ init = function(loaded, config)
   end
 
   ---Select the best item from an index
-  ---@param index integer
-  ---@return string name
+  ---@param index ItemIndex
+  ---@return string item_name
   local function select_best_from_index(index)
     local item_info = assert(item_lookup[index], "Invalid item index")
     if item_info.tag then
@@ -257,19 +265,19 @@ init = function(loaded, config)
 
   ---Select the best item from a list of ItemIndex
   ---@param list ItemIndex[]
-  ---@return string name
+  ---@return string item_name
   local function select_best_from_list(list)
     return item_lookup[list[1]][1]
   end
 
   ---Select the best item
-  ---@param a any
-  ---@return string name
-  local function get_best_item(a)
-    if type(a) == "table" then
-      return select_best_from_list(a)
-    elseif type(a) == "number" then
-      return select_best_from_index(a)
+  ---@param item ItemIndex[]|ItemIndex
+  ---@return string item_name
+  local function get_best_item(item)
+    if type(item) == "table" then
+      return select_best_from_list(item)
+    elseif type(item) == "number" then
+      return select_best_from_index(item)
     end
     error("hah not any")
   end
@@ -306,10 +314,10 @@ init = function(loaded, config)
   if log then
     craft_logger = log.interface.logger("crafting","request_craft")
   end
-  local _request_craft
+  local craft
   ---@type table<string,fun(node:CraftingNode,name:string,job_id:string,count:integer,request_chain:table):boolean>
-  local request_craft_types = {} -- TODO load this from grid.lua
-  local function add_request_craft_type(type, func)
+  local request_craft_types = {}
+  local function add_craft_type(type, func)
     request_craft_types[type] = func
   end
 
@@ -319,10 +327,17 @@ init = function(loaded, config)
   ---@param force boolean|nil
   ---@param request_chain table<string,boolean>|nil table of item names that have been requested
   ---@return CraftingNode[] leaves ITEM|CG node
-  function _request_craft(name, count, job_id, force, request_chain)
+  function craft(name, count, job_id, force, request_chain)
     request_chain = shallow_clone(request_chain or {})
     if request_chain[name] then
       error("Recursive craft", 0)
+      return {
+        name = name,
+        task_id = id(),
+        job_id = job_id,
+        type = "MISSING",
+        count = count,
+      }
     end
     request_chain[name] = true
     ---@type CraftingNode[]
@@ -335,8 +350,6 @@ init = function(loaded, config)
         task_id = id(),
         job_id = job_id
       }
-      task_lookup[node.task_id] = node
-      table.insert(job_lookup[job_id], node)
       -- First check if we have any of this
       local available = get_count(name)
       if available > 0 and not force then
@@ -357,7 +370,9 @@ init = function(loaded, config)
           end
         end
         if not success then
-          error(("No recipe found for %s"):format(name), 0)
+          craft_logger:debug("No recipe found for %s", name)
+          node.count = remaining
+          node.type = "MISSING"
         end
         remaining = remaining - node.count
       end
@@ -390,7 +405,7 @@ init = function(loaded, config)
     end
   end
 
-  ---Delete a given task, given the task is DONE and has no children
+  ---Delete a given task, asserting the task is DONE and has no children
   ---@param task CraftingNode
   function delete_task(task)
     if task.type == "ITEM" then
@@ -402,6 +417,8 @@ init = function(loaded, config)
     assert(task.state == "DONE", "Attempt to delete not done task.")
     done_lookup[task.task_id] = nil
     assert(task.children == nil, "Attempt to delete task with children.")
+    task_lookup[task.task_id] = nil
+    remove_from_array(job_lookup[task.job_id], task)
   end
 
 
@@ -476,6 +493,7 @@ init = function(loaded, config)
     crafting_handlers[type] = func
   end
 
+  ---Deletes all the node's children, calling delete_task on each
   local function delete_node_children(node)
     if not node.children then
       return
@@ -489,7 +507,7 @@ init = function(loaded, config)
 
   ---Update the state of the given node
   ---@param node CraftingNode
-  function update_node_state(node)
+  function tick_node(node)
     if not node.state then
       if node.type == "ROOT" then
         node.start_time = os.epoch("utc")
@@ -593,13 +611,13 @@ init = function(loaded, config)
   ---@param tree CraftingNode
   local function update_whole_tree(tree)
     -- traverse to each node of the tree
-    run_on_all(tree, update_node_state)
+    run_on_all(tree, tick_node)
   end
 
   ---Remove the parent of each child
   ---@param node CraftingNode
   local function remove_childrens_parent(node)
-    for k,v in pairs(node) do
+    for k,v in pairs(node.children) do
       v.parent = nil
     end
   end
@@ -623,10 +641,17 @@ init = function(loaded, config)
     task_lookup[task_id] = nil
   end
 
+  ---@type table<jobID,CraftingNode>
+  local pending_jobs = {}
+
   ---Cancel a job by given id
   ---@param job_id any
-  local function cancel_job(job_id)
+  local function cancel_craft(job_id)
     craft_logger:info("Cancelling job %s", job_id)
+    if pending_jobs[job_id] then
+      pending_jobs[job_id] = nil
+      return
+    end
     for k,v in pairs(job_lookup[job_id]) do
       cancel_task(v.task_id)
     end
@@ -636,7 +661,7 @@ init = function(loaded, config)
   local function tick_crafting()
     while true do
       for k,v in pairs(task_lookup) do
-        update_node_state(v)
+        tick_node(v)
       end
       save_task_lookup()
 
@@ -662,26 +687,26 @@ init = function(loaded, config)
           end
           -- all transfers finished
           change_node_state(node, "DONE")
-          update_node_state(node)
+          tick_node(node)
         end
       end
     end
   end
 
+
   ---@param name string
   ---@param count integer
-  ---@return CraftingNode root ROOT node
+  ---@return jobID pending_jobID
   local function create_craft_job(name, count)
     local job_id = id()
-    job_lookup[job_id] = {}
 
     craft_logger:debug("New job. name:%s,count:%u,job_id:%s", name, count, job_id)
     craft_logger:info("Requested craft for %ux%s", count, name)
-    local ok, job = pcall(_request_craft, name, count, job_id, true)
+    local ok, job = pcall(craft, name, count, job_id, true)
 
     if not ok then
       craft_logger:error("Creating job for %ux%s failed. %s. job_id:%s", count, name, job, job_id)
-      cancel_job(job_id)
+      cancel_craft(job_id)
       error(job) -- TODO
     end
 
@@ -693,19 +718,82 @@ init = function(loaded, config)
       task_id = id(),
     }
 
-    table.insert(job_lookup[job_id], root)
-    task_lookup[root.task_id] = root
+    pending_jobs[job_id] = root
 
-    return root
+    return job_id
   end
 
-  ---Request and start a crafting job
+  ---Add the values in table b to table a
+  ---@param a table<string,integer>
+  ---@param b table<string,integer>
+  local function add_tables(a,b)
+    for k,v in pairs(b) do
+      a[k] = (a[k] or 0) + v
+    end
+  end
+
+  ---@alias jobInfo {success: boolean, to_craft: table<string,integer>, to_use: table<string,integer>, missing: table<string,integer>|nil, job_id: jobID}
+
+  ---Extract information from a job root
+  ---@param root CraftingNode
+  ---@return jobInfo
+  local function get_job_info(root)
+    local ret = {}
+    ret.success = true
+    ret.to_craft = {}
+    ret.to_use = {}
+    ret.missing = {}
+    ret.job_id = root.job_id
+    if root.type == "ITEM" then
+      ret.to_use[root.name] = (ret.to_use[root.name] or 0) + root.count
+      print("item", ret.to_use[root.name])
+    elseif root.type == "MISSING" then
+      ret.success = false
+      ret.missing[root.name] = (ret.missing[root.name] or 0) + root.count
+    elseif root.type ~= "ROOT" then
+      ret.to_craft[root.name] = (ret.to_craft[root.name] or 0) + (root.count or 0)
+    end
+    if root.children then
+      for _, child in pairs(root.children) do
+        local child_info = get_job_info(child)
+        add_tables(ret.to_craft, child_info.to_craft)
+        add_tables(ret.to_use, child_info.to_use)
+        add_tables(ret.missing, child_info.missing or {})
+        ret.success = ret.success and child_info.success
+      end
+    end
+    return ret
+  end
+
+  ---Request a craft job, returning info about it
   ---@param name string
   ---@param count integer
+  ---@return jobInfo
   local function request_craft(name,count)
-    local root = create_craft_job(name,count)
-    update_whole_tree(root)
-    return root.job_id
+    local jobID = create_craft_job(name,count)
+    return get_job_info(pending_jobs[jobID])
+  end
+
+  ---Start a given job, if it's pending
+  ---@param jobID jobID
+  ---@return boolean success
+  local function start_craft(jobID)
+    local job = pending_jobs[jobID]
+    if not job then
+      return false
+    end
+    local job_info = get_job_info(job)
+    if not job_info.success then
+      return false -- cannot start unsuccessful job
+    end
+    pending_jobs[jobID] = nil
+    job_lookup[jobID] = {}
+    run_on_all(job, function(node)
+      task_lookup[node.task_id] = node
+      table.insert(job_lookup[jobID], node)
+    end)
+    update_whole_tree(job)
+    return true
   end
 
   local function json_file_import()
@@ -729,23 +817,27 @@ init = function(loaded, config)
     end,
 
     request_craft = request_craft,
+    start_craft = start_craft,
     load_json = load_json,
+    list_craftables = list_craftables,
+    cancel_craft = cancel_craft,
 
     recipeInterface = {
       change_node_state = change_node_state,
-      update_node_state = update_node_state,
+      tick_node = tick_node,
       get_best_item = get_best_item,
       get_stack_size = get_stack_size,
       merge_into = merge_into,
-      _request_craft = _request_craft,
+      craft = craft,
       push_items = push_items,
       add_crafting_handler = add_crafting_handler,
       add_ready_handler = add_ready_handler,
-      add_request_craft_type = add_request_craft_type,
+      add_craft_type = add_craft_type,
       delete_node_children = delete_node_children,
       delete_task = delete_task,
       get_or_cache_string = get_or_cache_string,
       add_json_type_handler = add_json_type_handler,
+      add_craftable_list = add_craftable_list
     }
   }
 end

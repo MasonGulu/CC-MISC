@@ -96,6 +96,12 @@ init = function(loaded, config)
     os.queueEvent("_performTransfer")
   end
 
+  local function defrag()
+    inventoryLock = true
+    storage.defrag()
+    inventoryLock = false
+  end
+
   ---Queue handling function
   ---Waits to do an optimal transfer of the whole queue
   local function queueHandler()
@@ -136,7 +142,7 @@ init = function(loaded, config)
       end
       transferQueueDiffers = true
       parallel.waitForAll(table.unpack(transferExecution))
-      storage.defrag()
+      defrag()
       os.queueEvent("inventoryUpdate", storage.list())
       if #transferQueue > 0 then
         performTransfer()
@@ -230,12 +236,6 @@ init = function(loaded, config)
     return table.unpack(waitForTransfer(id),3)
   end
 
-  local function defrag()
-    inventoryLock = true
-    storage.defrag()
-    inventoryLock = false
-  end
-
   if config.inventory.defragOnStart.value then
     print("Defragmenting...")
     local t0 = os.epoch("utc")
@@ -270,6 +270,7 @@ init = function(loaded, config)
       end
     end)
   end
+  module.performTransfer = performTransfer
 
   return module
 end,

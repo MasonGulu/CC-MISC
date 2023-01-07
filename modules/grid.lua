@@ -96,6 +96,14 @@ init = function(loaded,config)
     f.close()
   end
 
+  local function update_craftable_list()
+    local list = {}
+    for k,v in pairs(grid_recipes) do
+      table.insert(list, k)
+    end
+    crafting.add_craftable_list("grid", list)
+  end
+
   ---Load the grid recipes from a file
   local function load_grid_recipes()
     local f = assert(fs.open("recipes/grid_recipes.bin", "rb"))
@@ -131,6 +139,7 @@ init = function(loaded,config)
       cache_additional(recipe)
       shape_indicator = f.read(1)
     end
+    update_craftable_list()
   end
 
   load_grid_recipes()
@@ -254,15 +263,15 @@ init = function(loaded,config)
   ---@param name string
   ---@param job_id string
   ---@param count integer
-  ---@param request_chain table Do not modify, just pass through to calls to _request_craft
+  ---@param request_chain table Do not modify, just pass through to calls to craft
   ---@return boolean
-  local function request_craft_type(node,name,job_id,count,request_chain)
+  local function craft_type(node,name,job_id,count,request_chain)
     -- attempt to craft this
     local recipe = grid_recipes[name]
     if not recipe then
       return false
     end
-    node.type = "CG"
+    node.type = "grid"
     -- find out how many times we need to craft this recipe
     local to_craft = math.ceil(count / recipe.produces)
     -- this is the minimum amount we'd need to craft to produce enough of the requested item
@@ -280,9 +289,10 @@ init = function(loaded,config)
     node.plan = plan
     node.to_craft = to_craft
     node.children = {}
+    node.name = name
     for k,v in pairs(plan) do
       v.count = to_craft
-      crafting.merge_into(crafting._request_craft(v.name, v.count, job_id, nil, request_chain), node.children)
+      crafting.merge_into(crafting.craft(v.name, v.count, job_id, nil, request_chain), node.children)
     end
     for k,v in pairs(node.children) do
       v.parent = node
@@ -290,7 +300,7 @@ init = function(loaded,config)
     node.count = to_craft * recipe.produces
     return true
   end
-  crafting.add_request_craft_type("GRID", request_craft_type)
+  crafting.add_craft_type("grid", craft_type)
 
   local function ready_handler(node)
       -- check if there is a turtle available to craft this recipe
@@ -317,7 +327,7 @@ init = function(loaded,config)
         parallel.waitForAll(table.unpack(transfers))
       end
   end
-  crafting.add_ready_handler("CG", ready_handler)
+  crafting.add_ready_handler("grid", ready_handler)
 
   local function json_type_handler(json)
     local recipe = {}
@@ -378,7 +388,7 @@ init = function(loaded,config)
     --   turtle_crafting_done(turtle)
     -- end
   end
-  crafting.add_crafting_handler("CG", crafting_handler)
+  crafting.add_crafting_handler("grid", crafting_handler)
   return {
     start = function()
       -- loaded.crafting.interface.request_craft("minecraft:piston", 128)

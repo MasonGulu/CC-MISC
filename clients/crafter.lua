@@ -333,6 +333,7 @@ local function error_checker()
 end
 
 write_banner()
-pcall(parallel.waitForAny, interface, keep_alive, modem_interface, turtle_inventory_event, error_checker)
+local ok, err = pcall(parallel.waitForAny, interface, keep_alive, modem_interface, turtle_inventory_event, error_checker)
 
 os.setComputerLabel(("X %s - %s"):format(network_name, "OFFLINE"))
+error(err)

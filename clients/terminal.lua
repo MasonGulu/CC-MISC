@@ -35,10 +35,11 @@ local function event_turtle_inventory()
           busy_slots[i] = nil
         else
           -- an item was placed into this slot, empty the slot
-          lib.pullItems(self_name, i, nil, nil, nil, {optimal=false})
+          lib.pullItems(true, self_name, i, nil, nil, nil, {optimal=false})
         end
       end
     end
+    lib.performTransfer()
   end
 end
 
@@ -55,22 +56,24 @@ local function set_colors(fg,bg)
 end
 
 local function text(x,y,t)
-  display.setCursorPos(x,y)
+  display.setCursorPos(math.floor(x),math.floor(y))
   display.write(t)
 end
 
 local list = lib.list()
-
+local craftables = lib.listCraftables()
 
 local filter = ""
-local craft_name = ""
+local craft_filter = ""
 local item_amount = ""
 local sifted_list = {}
+local sifted_craftables = {}
 local selected_item = 1
+local selected_craft = 1
 local display_item -- prevent the selected item from drifting while directly accessing it
 local requesting_craft = false -- set to true to make INFO enter request craft instead
 
-local function apply_sort()
+local function sort_search()
   table.sort(list, function(a,b)
     if a.count ~= b.count then
       return a.count > b.count
@@ -87,7 +90,59 @@ local function apply_sort()
   end
   selected_item = math.min(selected_item, #sifted_list)
 end
-apply_sort()
+sort_search()
+local function filter_craftables()
+  table.sort(craftables)
+  if pcall(string.match,"",craft_filter) then
+    sifted_craftables = {}
+    for k,v in pairs(craftables) do
+      if v:match(craft_filter) then
+        table.insert(sifted_craftables, v)
+      end
+    end
+  end
+  selected_craft = math.min(selected_craft, #sifted_craftables)
+end
+filter_craftables()
+
+local craft_info
+local disable_drawing = false
+
+local function change_mode(new_mode)
+  if new_mode == "REQUEST" then
+    local craft = sifted_craftables[selected_craft]
+    if not craft then
+      mode = "CRAFT"
+      return
+    end
+    disable_drawing = true
+    display.clear()
+    text(1,1,"Requesting Item")
+    text(1,2,craft)
+    while true do
+      display.setCursorPos(1,3)
+      display.clearLine()
+      text(1,3,"Quantity? ")
+      local input = read()
+      if input == "" then
+        mode = "CRAFT"
+        disable_drawing = false
+        return
+      end
+      local num_input = tonumber(input)
+      if num_input then
+        if num_input > 0 then
+          craft_info = lib.requestCraft(craft, tonumber(input))
+          break
+        end
+      end
+    end
+    disable_drawing = false
+  end
+  mode = new_mode
+end
+
+
 local draw_modes = {
   SEARCH = function ()
     text(1,2,filter)
@@ -112,33 +167,85 @@ local draw_modes = {
     text(1,2,("%u x %s"):format(item.count,item.displayName))
     text(1,3,item.name)
     text(1,4,item.nbt)
+    if item.enchantments then
+      text(1,5,"Enchantments")
+      for k,v in ipairs(item.enchantments) do
+        text(1,5+k,v.displayName or v.name)
+      end
+    end
     text(1,h,("Withdraw: %s"):format(item_amount))
     display.setCursorBlink(true)
     display.setCursorPos(item_amount:len()+11,h)
   end,
   CRAFT = function ()
-    text(1,2,craft_name)
+    text(1,2,craft_filter)
+    text(1,3,"Name")
+    local screen_scroll = math.max(math.min(math.max(1,selected_craft-5), #sifted_craftables-h+4), 1)
+    for i=screen_scroll, math.min(screen_scroll+h, #sifted_craftables) do
+      local name = sifted_craftables[i]
+      local y = 4 + i - screen_scroll
+      if y > 3 then
+        if i == selected_craft then
+          set_colors(colors.black,colors.white)
+          display.setCursorPos(1,y)
+          display.clearLine()
+        end
+        text(1,y,name)
+        set_colors(colors.white,colors.black)
+      end
+    end
     display.setCursorBlink(true)
-    display.setCursorPos(craft_name:len()+1,2)
+    display.setCursorPos(craft_filter:len()+1,2)
+  end,
+  REQUEST = function ()
+    text(1,2,(craft_info.success and "Press y to craft, n to cancel") or "Press n to cancel the craft")
+    text(1,3,("Requested %s"):format(sifted_craftables[selected_craft]))
+    text(1,4,(craft_info.success and "Success") or "Failure")
+    local line = 5
+    if not craft_info.success then
+      set_colors(colors.red,colors.black)
+      text(1,line,"Missing:")
+      line = line + 1
+      for k,v in pairs(craft_info.missing) do
+        text(1,line,("%ux%s"):format(v,k))
+        line = line + 1
+      end
+      set_colors(colors.white,colors.black)
+    end
+    text(1,line,"To use:")
+    line = line + 1
+    for k,v in pairs(craft_info.to_use) do
+      text(1,line,("%ux%s"):format(v,k))
+      line = line + 1
+    end
+    text(1,line,"To craft:")
+    line = line + 1
+    for k,v in pairs(craft_info.to_craft) do
+      text(1,line,("%ux%s"):format(v,k))
+      line = line + 1
+    end
   end
 }
+
 local function draw()
-  display.setVisible(false)
-  display.setCursorBlink(false)
-  display.clear()
-  set_colors(colors.black, colors.white)
-  display.setCursorPos(1,1)
-  display.clearLine()
-  display.write(mode)
-  set_colors(colors.white,colors.black)
-  assert(draw_modes[mode], "Missing draw_mode "..mode)()
-  display.setVisible(true)
+  if draw_modes[mode] and not disable_drawing then
+    display.setVisible(false)
+    display.setCursorBlink(false)
+    display.clear()
+    set_colors(colors.black, colors.white)
+    display.setCursorPos(1,1)
+    display.clearLine()
+    display.write(mode)
+    set_colors(colors.white,colors.black)
+    draw_modes[mode]()
+    display.setVisible(true)
+  end
 end
 
 local function event_update()
   while true do
     _, list = os.pullEvent("update")
-    apply_sort()
+    sort_search()
     draw()
   end
 end
@@ -146,7 +253,7 @@ end
 local char_modes = {
   SEARCH = function (ch)
     filter = filter .. ch
-    apply_sort()
+    sort_search()
   end,
   INFO = function (ch)
     if ch >= '0' and ch <= '9' then
@@ -154,8 +261,22 @@ local char_modes = {
     end
   end,
   CRAFT = function (ch)
-    craft_name = craft_name .. ch
+    craft_filter = craft_filter .. ch
+    filter_craftables()
   end,
+  REQUEST = function (ch)
+    if craft_info then
+      if ch == 'y' and craft_info.success then
+        lib.startCraft(craft_info.job_id)
+        craft_info = nil
+        change_mode("SEARCH")
+      elseif ch == 'n' then
+        lib.cancelCraft(craft_info.job_id)
+        craft_info = nil
+        change_mode("SEARCH")
+      end
+    end
+  end
 }
 local function handle_char(ch)
   assert(char_modes[mode], "Missing char_mode "..mode)(ch)
@@ -171,7 +292,7 @@ local function request_item(item,amount)
   if requesting_craft then
     requesting_craft = false
     lib.requestCraft(item.name,amount)
-    mode = "SEARCH"
+    change_mode("SEARCH")
     return
   end
   amount = math.min(amount, item.count)
@@ -180,7 +301,6 @@ local function request_item(item,amount)
   for i = 1, 16 do
     free_slots[i] = true
   end
-  refresh_turtle_inventory()
   for i,_ in pairs(turtle_inventory) do
     free_slots[i] = nil
   end
@@ -190,27 +310,28 @@ local function request_item(item,amount)
     busy_slots[slot] = true
     free_slots[slot] = nil
   end
-  lib.pushItems(self_name,item.name,amount,nil,item.nbt)
+  lib.pushItems(true,self_name,item.name,amount,nil,item.nbt)
+  lib.performTransfer()
 end
 
 local key_modes = {
   SEARCH = function (key)
     if key == keys.backspace then
       filter = filter:sub(1, -2)
-      apply_sort()
+      sort_search()
     elseif key == keys.up then
       selected_item = math.max(selected_item - 1, 1)
     elseif key == keys.down then
       selected_item = math.min(selected_item + 1, #sifted_list)
     elseif key == keys.enter then
       if selected_item > 0 then
-        mode = "INFO"
+        change_mode("INFO")
         -- this can easily become outdated if the contents of the storage change
         display_item = sifted_list[selected_item]
         item_amount = tostring(math.min(display_item.maxCount, display_item.count))
       end
     elseif key == keys.tab then
-      mode = "CRAFT"
+      change_mode("CRAFT")
     end
   end,
   INFO = function (key)
@@ -218,19 +339,30 @@ local key_modes = {
       item_amount = item_amount:sub(1, -2)
     elseif key == keys.enter then
       request_item(display_item,tonumber(item_amount or 0))
-      mode = "SEARCH"
+      change_mode("SEARCH")
     end
   end,
   CRAFT = function (key)
     if key == keys.backspace then
-      craft_name = craft_name:sub(1, -2)
+      craft_filter = craft_filter:sub(1, -2)
+      filter_craftables()
+    elseif key == keys.up then
+      selected_craft = math.max(selected_craft - 1, 1)
+    elseif key == keys.down then
+      selected_craft = math.min(selected_craft + 1, #sifted_craftables)
     elseif key == keys.enter then
-      mode = "INFO"
-      display_item = {name=craft_name, count = 10000} -- TODO
-      requesting_craft = true
+      if selected_craft > 0 then
+        display_item = {name=sifted_craftables[selected_craft], count = 10000} -- TODO
+        requesting_craft = true
+        change_mode("REQUEST")
+        -- this can easily become outdated if the contents of the storage change
+      end
     elseif key == keys.tab then
-      mode = "SEARCH"
+      change_mode("SEARCH")
     end
+  end,
+  REQUEST = function (key)
+    
   end
 }
 local function handle_key(key)
@@ -251,3 +383,9 @@ end
 
 draw()
 parallel.waitForAll(lib.subscribe, event_turtle_inventory, event_update, input_handler)
+
+-- support your
+local small
+-- business casino
+
+-- << Across the bridge <<
