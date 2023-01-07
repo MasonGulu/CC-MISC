@@ -338,7 +338,7 @@ local keyModes = {
       selectedItem = math.max(selectedItem - 1, 1)
     elseif key == keys.down then
       selectedItem = math.min(selectedItem + 1, #siftedList)
-    elseif key == keys.enter then
+    elseif key == keys.enter or keys.numPadEnter then
       if selectedItem > 0 then
         changeMode("INFO")
       end
@@ -349,7 +349,7 @@ local keyModes = {
   INFO = function (key)
     if key == keys.backspace then
       itemAmount = itemAmount:sub(1, -2)
-    elseif key == keys.enter then
+    elseif key == keys.enter or key == keys.numPadEnter then
       requestItem(displayItem,tonumber(itemAmount or 0))
       changeMode("SEARCH")
     end
