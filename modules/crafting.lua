@@ -330,14 +330,13 @@ init = function(loaded, config)
   function craft(name, count, job_id, force, request_chain)
     request_chain = shallow_clone(request_chain or {})
     if request_chain[name] then
-      error("Recursive craft", 0)
-      return {
+      return {{
         name = name,
         task_id = id(),
         job_id = job_id,
         type = "MISSING",
         count = count,
-      }
+      }}
     end
     request_chain[name] = true
     ---@type CraftingNode[]
@@ -702,13 +701,7 @@ init = function(loaded, config)
 
     craft_logger:debug("New job. name:%s,count:%u,job_id:%s", name, count, job_id)
     craft_logger:info("Requested craft for %ux%s", count, name)
-    local ok, job = pcall(craft, name, count, job_id, true)
-
-    if not ok then
-      craft_logger:error("Creating job for %ux%s failed. %s. job_id:%s", count, name, job, job_id)
-      cancel_craft(job_id)
-      error(job) -- TODO
-    end
+    local job = craft(name, count, job_id, true)
 
     ---@type CraftingNode
     local root = {
