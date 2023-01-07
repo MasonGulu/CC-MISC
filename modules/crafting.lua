@@ -19,111 +19,111 @@ init = function(loaded, config)
 
   ---@type ItemInfo[]
   -- lookup into an ordered list of item names
-  local item_lookup = {}
+  local itemLookup = {}
   ---@type table<string,ItemIndex> lookup from name -> item_lookup index
-  local item_name_lookup = {}
+  local itemNameLookup = {}
 
 
   ---Get the index of a string or tag, creating one if one doesn't exist already
   ---@param str string
   ---@param tag boolean|nil
   ---@return ItemIndex
-  local function get_or_cache_string(str, tag)
+  local function getOrCacheString(str, tag)
     if not str then
       error("",2)
     end
-    if item_name_lookup[str] then
-      return item_name_lookup[str]
+    if itemNameLookup[str] then
+      return itemNameLookup[str]
     end
-    local i = #item_lookup + 1
+    local i = #itemLookup + 1
     if tag then
-      item_lookup[i] = {str,tag=true}
+      itemLookup[i] = {str,tag=true}
     else
-      item_lookup[i] = {str}
+      itemLookup[i] = {str}
     end
-    item_name_lookup[str] = i
+    itemNameLookup[str] = i
     return i
   end
 
-  local function save_item_lookup()
+  local function saveItemLookup()
     local f = assert(fs.open("recipes/item_lookup.bin", "wb"))
     f.write("ILUT")
-    for _,v in ipairs(item_lookup) do
-      local item_name = assert(v[1],#item_lookup)
+    for _,v in ipairs(itemLookup) do
+      local itemName = assert(v[1],#itemLookup)
       if v.tag then
         f.write("T")
       else
         f.write("I")
       end
-      common.write_string(f, item_name)
+      common.writeString(f, itemName)
     end
     f.close()
   end
-  local function load_item_lookup()
+  local function loadItemLookup()
     local f = fs.open("recipes/item_lookup.bin", "rb")
     if not f then
-      item_lookup = {}
+      itemLookup = {}
       return
     end
     assert(f.read(4) == "ILUT", "Invalid item_lookup file")
     local mode = f.read(1)
     while mode do
-      local name = common.read_string(f)
+      local name = common.readString(f)
       local item = {name}
       if mode == "I" then
       elseif mode == "T" then
         item.tag = true
       end
-      table.insert(item_lookup, item)
+      table.insert(itemLookup, item)
       mode = f.read(1)
     end
     f.close()
-    for k,v in pairs(item_lookup) do
-      item_name_lookup[v[1]] = k
+    for k,v in pairs(itemLookup) do
+      itemNameLookup[v[1]] = k
     end
   end
 
-  local json_logger = setmetatable({}, {__index=function () return function () end end})
+  local jsonLogger = setmetatable({}, {__index=function () return function () end end})
   if log then
-    json_logger = log.interface.logger("crafting","json_importing")
+    jsonLogger = log.interface.logger("crafting","json_importing")
   end
-  local json_type_handlers = {}
+  local jsonTypeHandlers = {}
   ---Add a JSON type handler, this should load a recipe from the given JSON table
-  ---@param json_type string
+  ---@param jsonType string
   ---@param handler fun(json: table)
-  local function add_json_type_handler(json_type, handler)
-    json_type_handlers[json_type] = handler
+  local function addJsonTypeHandler(jsonType, handler)
+    jsonTypeHandlers[jsonType] = handler
   end
-  local function load_json(json)
-    if json_type_handlers[json.type] then
+  local function loadJson(json)
+    if jsonTypeHandlers[json.type] then
       print("Handling", json.type)
-      json_logger:info("Importing JSON of type %s", json.type)
-      json_type_handlers[json.type](json)
+      jsonLogger:info("Importing JSON of type %s", json.type)
+      jsonTypeHandlers[json.type](json)
     else
-      json_logger:info("Skipping JSON of type %s, no handler available", json.type)
+      jsonLogger:info("Skipping JSON of type %s, no handler available", json.type)
       print("Skipping", json.type)
     end
   end
 
-  load_item_lookup()
+  loadItemLookup()
 
   ---@alias taskID string uuid foriegn key
-  ---@alias jobID string
+  ---@alias JobId string
 
   ---@type CraftingNode[] tasks that have unmet dependencies
-  local waiting_queue = {}
+  local waitingQueue = {}
   ---@type CraftingNode[] tasks that have all dependencies met
-  local ready_queue = {}
+  local readyQueue = {}
   ---@type CraftingNode[] tasks that are in progress
-  local crafting_queue = {}
+  local craftingQueue = {}
 
   ---@type table<string,CraftingNode> tasks that have been completed, but are still relavant
-  local done_lookup = {}
+  local doneLookup = {}
 
   ---@type table<string,CraftingNode>
-  local transfer_id_task_lut = {}
+  local transferIdTaskLUT = {}
 
-  local tick_node, change_node_state, delete_task
+  local tickNode, changeNodeState, deleteTask
 
   --- ITEM - this node represents a quantity of items from the network
   --- ROOT - this node represents the root of a crafting task
@@ -136,27 +136,27 @@ init = function(loaded, config)
   ---@field type "ITEM" | "ROOT" | "MISSING"
   ---@field name string
   ---@field count integer amount of this item to produce
-  ---@field task_id string
-  ---@field job_id string
+  ---@field taskId string
+  ---@field jobId string
   ---@field state NodeState
   ---@field priority integer TODO
 
   ---@type table<string,integer> item name -> count reserved
-  local reserved_items = {}
+  local reservedItems = {}
 
   ---Get count of item in system, excluding reserved
   ---@param name string
   ---@return integer
-  local function get_count(name)
-    return loaded.inventory.interface.getCount(name) - (reserved_items[name] or 0)
+  local function getCount(name)
+    return loaded.inventory.interface.getCount(name) - (reservedItems[name] or 0)
   end
 
   ---Reserve amount of item name
   ---@param name string
   ---@param amount integer
   ---@return integer
-  local function allocate_items(name, amount)
-    reserved_items[name] = (reserved_items[name] or 0) + amount
+  local function allocateItems(name, amount)
+    reservedItems[name] = (reservedItems[name] or 0) + amount
     return amount
   end
 
@@ -164,26 +164,26 @@ init = function(loaded, config)
   ---@param name string
   ---@param amount integer
   ---@return integer
-  local function deallocate_items(name, amount)
-    reserved_items[name] = reserved_items[name] - amount
-    assert(reserved_items[name] >= 0, "We have negative items reserved?")
-    if reserved_items[name] == 0 then
-      reserved_items[name] = nil
+  local function deallocateItems(name, amount)
+    reservedItems[name] = reservedItems[name] - amount
+    assert(reservedItems[name] >= 0, "We have negative items reserved?")
+    if reservedItems[name] == 0 then
+      reservedItems[name] = nil
     end
     return amount
   end
 
-  local cached_stack_sizes = {} -- TODO save this
+  local cachedStackSizes = {} -- TODO save this
 
   ---Get the maximum stacksize of an item by name
   ---@param name string
-  local function get_stack_size(name)
-    if cached_stack_sizes[name] then
-      return cached_stack_sizes[name]
+  local function getStackSize(name)
+    if cachedStackSizes[name] then
+      return cachedStackSizes[name]
     end
     local item = loaded.inventory.interface.getItem(name)
-    cached_stack_sizes[name] = (item and item.item and item.item.maxCount) or 64
-    return cached_stack_sizes[name]
+    cachedStackSizes[name] = (item and item.item and item.item.maxCount) or 64
+    return cachedStackSizes[name]
   end
 
   ---Get a psuedorandom uuid
@@ -193,17 +193,17 @@ init = function(loaded, config)
   end
 
   ---@type table<string,string[]>
-  local craftable_lists = {}
+  local craftableLists = {}
   ---Set the table of craftable items for a given id
   ---@param id string ID of crafting module/type
   ---@param list string[] table of craftable item names, assigned by reference
-  local function add_craftable_list(id, list)
-    craftable_lists[id] = list
+  local function addCraftableList(id, list)
+    craftableLists[id] = list
   end
 
-  local function list_craftables()
+  local function listCraftables()
     local l = {}
-    for k, v in pairs(craftable_lists) do
+    for k, v in pairs(craftableLists) do
       for i, s in ipairs(v) do
         table.insert(l, s)
       end
@@ -212,41 +212,41 @@ init = function(loaded, config)
   end
 
   ---@type table<string,string[]> tag -> item names
-  local cached_tag_lookup = {}
+  local cachedTagLookup = {}
   -- TODO load this
   ---@type table<string,table<string,boolean>> tag -> item name -> is it in cached_tag_lookup
-  local cached_tag_presence = {}
-  for tag,names in pairs(cached_tag_lookup) do
-    cached_tag_presence[tag] = {}
+  local cachedTagPresence = {}
+  for tag,names in pairs(cachedTagLookup) do
+    cachedTagPresence[tag] = {}
     for _, name in ipairs(names) do
-      cached_tag_presence[tag][name] = true
+      cachedTagPresence[tag][name] = true
     end
   end
 
   ---Select the best item from a tag
   ---@param tag string
-  ---@return string item_name
-  local function select_best_from_tag(tag)
+  ---@return string itemName
+  local function selectBestFromTag(tag)
     if config.crafting.tagLookup.value[tag] then
       return config.crafting.tagLookup.value[tag]
     end
-    if not cached_tag_presence[tag] then
-      cached_tag_presence[tag] = {}
-      cached_tag_lookup[tag] = {}
+    if not cachedTagPresence[tag] then
+      cachedTagPresence[tag] = {}
+      cachedTagLookup[tag] = {}
     end
     -- first check if we have anything
-    local items_with_tag = loaded.inventory.interface.getTag(tag)
-    local items_with_tag_count = {}
-    for k,v in ipairs(items_with_tag) do
-      if not cached_tag_presence[tag][v] then
-        cached_tag_presence[tag][v] = true
-        table.insert(cached_tag_lookup[tag], v)
+    local itemsWithTag = loaded.inventory.interface.getTag(tag)
+    local itemsWithTagsCount = {}
+    for k,v in ipairs(itemsWithTag) do
+      if not cachedTagPresence[tag][v] then
+        cachedTagPresence[tag][v] = true
+        table.insert(cachedTagLookup[tag], v)
       end
-      items_with_tag_count[k] = {name=v, count=loaded.inventory.interface.getCount(v)}
+      itemsWithTagsCount[k] = {name=v, count=loaded.inventory.interface.getCount(v)}
     end
-    table.sort(items_with_tag_count, function(a,b) return a.count > b.count end)
-    if items_with_tag_count[1] then
-      return items_with_tag_count[1].name
+    table.sort(itemsWithTagsCount, function(a,b) return a.count > b.count end)
+    if itemsWithTagsCount[1] then
+      return itemsWithTagsCount[1].name
     end
     -- then check if we can craft anything (todo)
     error("Not yet implemented")
@@ -254,30 +254,30 @@ init = function(loaded, config)
 
   ---Select the best item from an index
   ---@param index ItemIndex
-  ---@return string item_name
-  local function select_best_from_index(index)
-    local item_info = assert(item_lookup[index], "Invalid item index")
-    if item_info.tag then
-      return select_best_from_tag(item_info[1])
+  ---@return string itemName
+  local function selectBestFromIndex(index)
+    local itemInfo = assert(itemLookup[index], "Invalid item index")
+    if itemInfo.tag then
+      return selectBestFromTag(itemInfo[1])
     end
-    return item_info[1]
+    return itemInfo[1]
   end
 
   ---Select the best item from a list of ItemIndex
   ---@param list ItemIndex[]
-  ---@return string item_name
-  local function select_best_from_list(list)
-    return item_lookup[list[1]][1]
+  ---@return string itemName
+  local function selectBestFromList(list)
+    return itemLookup[list[1]][1]
   end
 
   ---Select the best item
   ---@param item ItemIndex[]|ItemIndex
-  ---@return string item_name
-  local function get_best_item(item)
+  ---@return string itemName
+  local function getBestItem(item)
     if type(item) == "table" then
-      return select_best_from_list(item)
+      return selectBestFromList(item)
     elseif type(item) == "number" then
-      return select_best_from_index(item)
+      return selectBestFromIndex(item)
     end
     error("hah not any")
   end
@@ -285,24 +285,24 @@ init = function(loaded, config)
   ---Merge from into the end of to
   ---@param from table
   ---@param to table
-  local function merge_into(from, to)
+  local function mergeInto(from, to)
     for k,v in pairs(from) do
       table.insert(to,v)
     end
   end
 
-  ---Lookup from task_id to the corrosponding CraftingNode
+  ---Lookup from taskId to the corrosponding CraftingNode
   ---@type table<string,CraftingNode>
-  local task_lookup = {}
+  local taskLookup = {}
 
-  ---Lookup from job_id to the corrosponding CraftingNode
+  ---Lookup from jobId to the corrosponding CraftingNode
   ---@type table<string,CraftingNode[]>
-  local job_lookup = {}
+  local jobLookup = {}
 
   ---Shallow clone a table
   ---@param t table
   ---@return table
-  local function shallow_clone(t)
+  local function shallowClone(t)
     local nt = {}
     for k,v in pairs(t) do
       nt[k] = v
@@ -310,67 +310,67 @@ init = function(loaded, config)
     return nt
   end
 
-  local craft_logger = setmetatable({}, {__index=function () return function () end end})
+  local craftLogger = setmetatable({}, {__index=function () return function () end end})
   if log then
-    craft_logger = log.interface.logger("crafting","request_craft")
+    craftLogger = log.interface.logger("crafting","request_craft")
   end
   local craft
-  ---@type table<string,fun(node:CraftingNode,name:string,job_id:string,count:integer,request_chain:table):boolean>
-  local request_craft_types = {}
-  local function add_craft_type(type, func)
-    request_craft_types[type] = func
+  ---@type table<string,fun(node:CraftingNode,name:string,jobId:string,count:integer,request_chain:table):boolean>
+  local requestCraftTypes = {}
+  local function addCraftType(type, func)
+    requestCraftTypes[type] = func
   end
 
   ---@param name string item name
   ---@param count integer
-  ---@param job_id string
+  ---@param jobId string
   ---@param force boolean|nil
-  ---@param request_chain table<string,boolean>|nil table of item names that have been requested
+  ---@param requestChain table<string,boolean>|nil table of item names that have been requested
   ---@return CraftingNode[] leaves ITEM|CG node
-  function craft(name, count, job_id, force, request_chain)
-    request_chain = shallow_clone(request_chain or {})
-    if request_chain[name] then
+  function craft(name, count, jobId, force, requestChain)
+    requestChain = shallowClone(requestChain or {})
+    if requestChain[name] then
       return {{
         name = name,
-        task_id = id(),
-        job_id = job_id,
+        taskId = id(),
+        jobId = jobId,
         type = "MISSING",
         count = count,
       }}
     end
-    request_chain[name] = true
+    requestChain[name] = true
     ---@type CraftingNode[]
     local nodes = {}
     local remaining = count
-    craft_logger:debug("Remaining craft count for %s is %u", name, remaining)
+    craftLogger:debug("Remaining craft count for %s is %u", name, remaining)
     while remaining > 0 do
       ---@type CraftingNode
       local node = {
         name = name,
-        task_id = id(),
-        job_id = job_id
+        taskId = id(),
+        jobId = jobId
       }
       -- First check if we have any of this
-      local available = get_count(name)
+      local available = getCount(name)
       if available > 0 and not force then
         -- we do, so allocate it
-        local allocate_amount = allocate_items(name, math.min(available, remaining))
+        local allocateAmount = allocateItems(name, math.min(available, remaining))
         node.type = "ITEM"
-        node.count = allocate_amount
-        remaining = remaining - allocate_amount
-        craft_logger:debug("Item. name:%s,count:%u,task_id:%s,job_id:%s", name, allocate_amount, node.task_id, job_id)
+        node.count = allocateAmount
+        remaining = remaining - allocateAmount
+        craftLogger:debug("Item. name:%s,count:%u,taskId:%s,jobId:%s", name, allocateAmount, node.taskId, jobId)
       else
         local success = false
-        for k,v in pairs(request_craft_types) do
-          success = v(node, name, job_id, remaining, request_chain)
+        for k,v in pairs(requestCraftTypes) do
+          success = v(node, name, jobId, remaining, requestChain)
           if success then
-            craft_logger:debug("Recipe. provider:%s,name:%s,count:%u,task_id:%s,job_id:%s", k, name, node.count, node.task_id, job_id)
-            craft_logger:info("Recipe for %s was provided by %s", name, k)
+            craftLogger:debug("Recipe. provider:%s,name:%s,count:%u,taskId:%s,jobId:%s", k, name, node.count, node.taskId, jobId)
+            craftLogger:info("Recipe for %s was provided by %s", name, k)
             break
           end
         end
         if not success then
-          craft_logger:debug("No recipe found for %s", name)
+          craftLogger:debug("No recipe found for %s", name)
           node.count = remaining
           node.type = "MISSING"
         end
@@ -384,11 +384,11 @@ init = function(loaded, config)
   ---Run the given function an all nodes of the given tree
   ---@param root CraftingNode root
   ---@param func fun(node: CraftingNode)
-  local function run_on_all(root, func)
+  local function runOnAll(root, func)
     func(root)
     if root.children then
       for _,v in pairs(root.children) do
-        run_on_all(v, func)
+        runOnAll(v, func)
       end
     end
   end
@@ -397,7 +397,7 @@ init = function(loaded, config)
   ---@generic T : any
   ---@param arr T[]
   ---@param val T
-  local function remove_from_array(arr, val)
+  local function removeFromArray(arr, val)
     for i,v in ipairs(arr) do
       if v == val then
         table.remove(arr, i)
@@ -407,51 +407,51 @@ init = function(loaded, config)
 
   ---Delete a given task, asserting the task is DONE and has no children
   ---@param task CraftingNode
-  function delete_task(task)
+  function deleteTask(task)
     if task.type == "ITEM" then
-      deallocate_items(task.name, task.count)
+      deallocateItems(task.name, task.count)
     end
     if task.parent then
-      remove_from_array(task.parent.children, task)
+      removeFromArray(task.parent.children, task)
     end
     assert(task.state == "DONE", "Attempt to delete not done task.")
-    done_lookup[task.task_id] = nil
+    doneLookup[task.taskId] = nil
     assert(task.children == nil, "Attempt to delete task with children.")
-    task_lookup[task.task_id] = nil
-    remove_from_array(job_lookup[task.job_id], task)
+    taskLookup[task.taskId] = nil
+    removeFromArray(jobLookup[task.jobId], task)
   end
 
 
-  local node_state_logger = setmetatable({}, {__index=function () return function () end end})
+  local nodeStateLogger = setmetatable({}, {__index=function () return function () end end})
   if log then
-    node_state_logger = log.interface.logger("crafting", "node_state")
+    nodeStateLogger = log.interface.logger("crafting", "node_state")
   end
   ---Safely change a node to a new state
   ---Only modifies the node's state and related caches
   ---@param node CraftingNode
-  ---@param new_state NodeState
-  function change_node_state(node, new_state)
+  ---@param newState NodeState
+  function changeNodeState(node, newState)
     if not node then
       error("No node?", 2)
     end
     if node.state == "WAITING" then
-      remove_from_array(waiting_queue, node)
+      removeFromArray(waitingQueue, node)
     elseif node.state == "READY" then
-      remove_from_array(ready_queue, node)
+      removeFromArray(readyQueue, node)
     elseif node.state == "CRAFTING" then
-      remove_from_array(crafting_queue, node)
+      removeFromArray(craftingQueue, node)
     elseif node.state == "DONE" then
-      done_lookup[node.task_id] = nil
+      doneLookup[node.taskId] = nil
     end
-    node.state = new_state
+    node.state = newState
     if node.state == "WAITING" then
-      table.insert(waiting_queue, node)
+      table.insert(waitingQueue, node)
     elseif node.state == "READY" then
-      table.insert(ready_queue, node)
+      table.insert(readyQueue, node)
     elseif node.state == "CRAFTING" then
-      table.insert(crafting_queue, node)
+      table.insert(craftingQueue, node)
     elseif node.state == "DONE" then
-      done_lookup[node.task_id] = node
+      doneLookup[node.taskId] = node
     end
   end
 
@@ -459,16 +459,16 @@ init = function(loaded, config)
   ---enough items to a slot
   ---@param to string
   ---@param name string
-  ---@param to_move integer
+  ---@param toMove integer
   ---@param slot integer
-  local function push_items(to, name, to_move, slot)
-    local fail_count = 0
-    while to_move > 0 do
-      local transfered = loaded.inventory.interface.pushItems(false, to, name, to_move, slot, nil, {optimal=false})
-      to_move = to_move - transfered
+  local function pushItems(to, name, toMove, slot)
+    local failCount = 0
+    while toMove > 0 do
+      local transfered = loaded.inventory.interface.pushItems(false, to, name, toMove, slot, nil, {optimal=false})
+      toMove = toMove - transfered
       if transfered == 0 then
-        fail_count = fail_count + 1
-        if fail_count > 3 then
+        failCount = failCount + 1
+        if failCount > 3 then
           error(("Unable to move %s"):format(name))
         end
       end
@@ -476,30 +476,30 @@ init = function(loaded, config)
   end
 
   ---@type table<string,fun(node: CraftingNode)> Process an item in the READY state
-  local ready_handlers = {} -- TODO get this from grid.lua
+  local readyHandlers = {} -- TODO get this from grid.lua
 
   ---@param type string
   ---@param func fun(node: CraftingNode)>
-  local function add_ready_handler(type, func)
-    ready_handlers[type] = func
+  local function addReadyHandler(type, func)
+    readyHandlers[type] = func
   end
 
   ---@type table<string,fun(node: CraftingNode)> Process an item that is in the CRAFTING state
-  local crafting_handlers = {} -- TODO get this from grid.lua
+  local craftingHandlers = {} -- TODO get this from grid.lua
 
   ---@param type string
   ---@param func fun(node: CraftingNode)>
-  local function add_crafting_handler(type, func)
-    crafting_handlers[type] = func
+  local function addCraftingHandler(type, func)
+    craftingHandlers[type] = func
   end
 
   ---Deletes all the node's children, calling delete_task on each
-  local function delete_node_children(node)
+  local function deleteNodeChildren(node)
     if not node.children then
       return
     end
     for _,child in pairs(node.children) do
-      delete_task(child)
+      deleteTask(child)
     end
     node.children = nil
 
@@ -507,18 +507,18 @@ init = function(loaded, config)
 
   ---Update the state of the given node
   ---@param node CraftingNode
-  function tick_node(node)
+  function tickNode(node)
     if not node.state then
       if node.type == "ROOT" then
-        node.start_time = os.epoch("utc")
+        node.startTime = os.epoch("utc")
       end
       -- This is an uninitialized node
       -- leaf -> set state to READY
       -- otherwise -> set state to WAITING
       if node.children then
-        change_node_state(node, "WAITING")
+        changeNodeState(node, "WAITING")
       else
-        change_node_state(node, "DONE")
+        changeNodeState(node, "DONE")
       end
       return
     end
@@ -526,80 +526,80 @@ init = function(loaded, config)
     if node.state == "WAITING" then
       if node.children then
         -- this has children it depends upon
-        local all_children_done = true
+        local allChildrenDone = true
         for _,child in pairs(node.children) do
-          all_children_done = child.state == "DONE"
-          if not all_children_done then
+          allChildrenDone = child.state == "DONE"
+          if not allChildrenDone then
             break
           end
         end
-        if all_children_done then
+        if allChildrenDone then
           -- this is ready to be crafted
-          print("ready to be crafted", node.type, node.task_id)
-          delete_node_children(node)
-          remove_from_array(waiting_queue, node)
+          print("ready to be crafted", node.type, node.taskId)
+          deleteNodeChildren(node)
+          removeFromArray(waitingQueue, node)
           if node.type == "ROOT" then
             -- This task is the root of a job
             -- TODO some notification that the whole job is done!
-            node_state_logger:info("Finished job_id:%s in %.2fsec", node.job_id, (os.epoch("utc") - node.start_time) / 1000)
-            change_node_state(node, "DONE")
-            delete_task(node)
+            nodeStateLogger:info("Finished jobId:%s in %.2fsec", node.jobId, (os.epoch("utc") - node.startTime) / 1000)
+            changeNodeState(node, "DONE")
+            deleteTask(node)
             return
           end
-          change_node_state(node, "READY")
+          changeNodeState(node, "READY")
         end
       else
-        change_node_state(node, "READY")
+        changeNodeState(node, "READY")
       end
     elseif node.state == "READY" then
-      assert(ready_handlers[node.type], "No ready_handler for type "..node.type)
-      ready_handlers[node.type](node)
+      assert(readyHandlers[node.type], "No readyHandler for type "..node.type)
+      readyHandlers[node.type](node)
     elseif node.state == "CRAFTING" then
-      assert(crafting_handlers[node.type], "No crafting_handler for type "..node.type)
-      crafting_handlers[node.type](node)
+      assert(craftingHandlers[node.type], "No craftingHandler for type "..node.type)
+      craftingHandlers[node.type](node)
     elseif node.state == "DONE" and node.children then
-      delete_node_children(node)
+      deleteNodeChildren(node)
     end
   end
 
-  local function save_task_lookup()
-    local flat_task_lookup = {}
-    for k,v in pairs(task_lookup) do
-      flat_task_lookup[k] = shallow_clone(v)
-      local flat_task = flat_task_lookup[k]
+  local function saveTaskLookup()
+    local flatTaskLookup = {}
+    for k,v in pairs(taskLookup) do
+      flatTaskLookup[k] = shallowClone(v)
+      local flatTask = flatTaskLookup[k]
       if v.parent then
-        flat_task.parent = v.parent.task_id
+        flatTask.parent = v.parent.taskId
       end
       if v.children then
-        flat_task.children = {}
+        flatTask.children = {}
         for i,ch in pairs(v.children) do
-          flat_task.children[i] = ch.task_id
+          flatTask.children[i] = ch.taskId
         end
       end
     end
-    require "common".saveTableToFile("flat_task_lookup.txt", flat_task_lookup)
+    require "common".saveTableToFile("flatTaskLookup.txt", flatTaskLookup)
   end
 
-  local function load_task_lookup()
-    task_lookup = assert(require"common".loadTableFromFile("flat_task_lookup.txt"), "File does not exist")
-    for k,v in pairs(task_lookup) do
+  local function loadTaskLookup()
+    taskLookup = assert(require"common".loadTableFromFile("flatTaskLookup.txt"), "File does not exist")
+    for k,v in pairs(taskLookup) do
       if v.parent then
-        v.parent = task_lookup[v.parent]
+        v.parent = taskLookup[v.parent]
       end
       if v.children then
         for i,ch in pairs(v.children) do
-          v.children[i] = task_lookup[ch]
+          v.children[i] = taskLookup[ch]
         end
       end
       if v.state then
         if v.state == "WAITING" then
-          table.insert(waiting_queue, v)
+          table.insert(waitingQueue, v)
         elseif v.state == "READY" then
-          table.insert(ready_queue, v)
+          table.insert(readyQueue, v)
         elseif v.state == "CRAFTING" then
-          table.insert(crafting_queue, v)
+          table.insert(craftingQueue, v)
         elseif v.state == "DONE" then
-          done_lookup[v.task_id] = v
+          doneLookup[v.taskId] = v
         else
           error("Invalid state on load")
         end
@@ -609,85 +609,85 @@ init = function(loaded, config)
 
   ---Update every node on the tree
   ---@param tree CraftingNode
-  local function update_whole_tree(tree)
+  local function updateWholeTree(tree)
     -- traverse to each node of the tree
-    run_on_all(tree, tick_node)
+    runOnAll(tree, tickNode)
   end
 
   ---Remove the parent of each child
   ---@param node CraftingNode
-  local function remove_childrens_parent(node)
+  local function removeChildrensParents(node)
     for k,v in pairs(node.children) do
       v.parent = nil
     end
   end
 
   ---Safely cancel a task by ID
-  ---@param task_id string
-  local function cancel_task(task_id)
-    craft_logger:debug("Cancelling task %s", task_id)
-    local task = task_lookup[task_id]
+  ---@param taskId string
+  local function cancelTask(taskId)
+    craftLogger:debug("Cancelling task %s", taskId)
+    local task = taskLookup[taskId]
     if task.state then
       if task.state == "WAITING" then
-        remove_from_array(waiting_queue, task)
-        remove_childrens_parent(task)
+        removeFromArray(waitingQueue, task)
+        removeChildrensParents(task)
       elseif task.state == "READY" then
-        remove_from_array(ready_queue, task)
-        remove_childrens_parent(task)
+        removeFromArray(readyQueue, task)
+        removeChildrensParents(task)
       end
       -- if it's not in these two states, then it's not cancellable
       return
     end
-    task_lookup[task_id] = nil
+    taskLookup[taskId] = nil
   end
 
-  ---@type table<jobID,CraftingNode>
-  local pending_jobs = {}
+  ---@type table<JobId,CraftingNode>
+  local pendingJobs = {}
 
   ---Cancel a job by given id
-  ---@param job_id any
-  local function cancel_craft(job_id)
-    craft_logger:info("Cancelling job %s", job_id)
-    if pending_jobs[job_id] then
-      pending_jobs[job_id] = nil
+  ---@param jobId any
+  local function cancelCraft(jobId)
+    craftLogger:info("Cancelling job %s", jobId)
+    if pendingJobs[jobId] then
+      pendingJobs[jobId] = nil
       return
     end
-    for k,v in pairs(job_lookup[job_id]) do
-      cancel_task(v.task_id)
+    for k,v in pairs(jobLookup[jobId]) do
+      cancelTask(v.taskId)
     end
-    job_lookup[job_id] = nil
+    jobLookup[jobId] = nil
   end
 
-  local function tick_crafting()
+  local function tickCrafting()
     while true do
-      for k,v in pairs(task_lookup) do
-        tick_node(v)
+      for k,v in pairs(taskLookup) do
+        tickNode(v)
       end
-      save_task_lookup()
+      saveTaskLookup()
 
       os.sleep(1)
     end
   end
 
-  local inventory_transfer_logger
+  local inventoryTransferLogger
   if log then
-    inventory_transfer_logger = log.interface.logger("crafting","inventory_transfer_listener")
+    inventoryTransferLogger = log.interface.logger("crafting","inventory_transfer_listener")
   end
-  local function inventory_transfer_listener()
+  local function inventoryTransferListener()
     while true do
-      local _, transfer_id = os.pullEvent("inventoryFinished")
+      local _, transferId = os.pullEvent("inventoryFinished")
       ---@type CraftingNode
-      local node = transfer_id_task_lut[transfer_id]
+      local node = transferIdTaskLUT[transferId]
       if node then
-        transfer_id_task_lut[transfer_id] = nil
-        remove_from_array(node.transfers, transfer_id)
+        transferIdTaskLUT[transferId] = nil
+        removeFromArray(node.transfers, transferId)
         if #node.transfers == 0 then
           if log then
-            inventory_transfer_logger:debug("Node DONE, task_id:%s, job_id:%s", node.task_id, node.job_id)
+            inventoryTransferLogger:debug("Node DONE, taskId:%s, jobId:%s", node.taskId, node.jobId)
           end
           -- all transfers finished
-          change_node_state(node, "DONE")
-          tick_node(node)
+          changeNodeState(node, "DONE")
+          tickNode(node)
         end
       end
     end
@@ -696,66 +696,59 @@ init = function(loaded, config)
 
   ---@param name string
   ---@param count integer
-  ---@return jobID pending_jobID
-  local function create_craft_job(name, count)
-    local job_id = id()
+  ---@return JobId pendingJobId
+  local function createCraftJob(name, count)
+    local jobId = id()
 
-    craft_logger:debug("New job. name:%s,count:%u,job_id:%s", name, count, job_id)
-    craft_logger:info("Requested craft for %ux%s", count, name)
-    local job = craft(name, count, job_id, true)
+    craftLogger:debug("New job. name:%s,count:%u,jobId:%s", name, count, jobId)
+    craftLogger:info("Requested craft for %ux%s", count, name)
+    local job = craft(name, count, jobId, true)
 
     ---@type CraftingNode
     local root = {
-      job_id = job_id,
+      jobId = jobId,
       children = job,
       type = "ROOT",
-      task_id = id(),
+      taskId = id(),
     }
 
-    pending_jobs[job_id] = root
+    pendingJobs[jobId] = root
 
-    return job_id
+    return jobId
   end
 
   ---Add the values in table b to table a
   ---@param a table<string,integer>
   ---@param b table<string,integer>
-  local function add_tables(a,b)
+  local function addTables(a,b)
     for k,v in pairs(b) do
       a[k] = (a[k] or 0) + v
     end
   end
 
-  ---@alias jobInfo {success: boolean, to_craft: table<string,integer>, to_use: table<string,integer>, missing: table<string,integer>|nil, job_id: jobID}
+  ---@alias jobInfo {success: boolean, toCraft: table<string,integer>, toUse: table<string,integer>, missing: table<string,integer>|nil, jobId: JobId}
 
   ---Extract information from a job root
   ---@param root CraftingNode
   ---@return jobInfo
-  local function get_job_info(root)
+  local function getJobInfo(root)
     local ret = {}
     ret.success = true
-    ret.to_craft = {}
-    ret.to_use = {}
+    ret.toCraft = {}
+    ret.toUse = {}
     ret.missing = {}
-    ret.job_id = root.job_id
-    if root.type == "ITEM" then
-      ret.to_use[root.name] = (ret.to_use[root.name] or 0) + root.count
-      print("item", ret.to_use[root.name])
-    elseif root.type == "MISSING" then
-      ret.success = false
-      ret.missing[root.name] = (ret.missing[root.name] or 0) + root.count
-    elseif root.type ~= "ROOT" then
-      ret.to_craft[root.name] = (ret.to_craft[root.name] or 0) + (root.count or 0)
-    end
-    if root.children then
-      for _, child in pairs(root.children) do
-        local child_info = get_job_info(child)
-        add_tables(ret.to_craft, child_info.to_craft)
-        add_tables(ret.to_use, child_info.to_use)
-        add_tables(ret.missing, child_info.missing or {})
-        ret.success = ret.success and child_info.success
+    ret.jobId = root.jobId
+    runOnAll(root, function()
+      if root.type == "ITEM" then
+        ret.toUse[root.name] = (ret.toUse[root.name] or 0) + root.count
+        print("item", ret.toUse[root.name])
+      elseif root.type == "MISSING" then
+        ret.success = false
+        ret.missing[root.name] = (ret.missing[root.name] or 0) + root.count
+      elseif root.type ~= "ROOT" then
+        ret.toCraft[root.name] = (ret.toCraft[root.name] or 0) + (root.count or 0)
       end
-    end
+    end)
     return ret
   end
 
@@ -763,36 +756,36 @@ init = function(loaded, config)
   ---@param name string
   ---@param count integer
   ---@return jobInfo
-  local function request_craft(name,count)
-    local jobID = create_craft_job(name,count)
-    craft_logger:debug("Request craft called for %u %s(s), returning job ID %u", count, name, jobID)
-    return get_job_info(pending_jobs[jobID])
+  local function requestCraft(name,count)
+    local jobID = createCraftJob(name,count)
+    craftLogger:debug("Request craft called for %u %s(s), returning job ID %u", count, name, jobID)
+    return getJobInfo(pendingJobs[jobID])
   end
 
   ---Start a given job, if it's pending
-  ---@param jobID jobID
+  ---@param jobId JobId
   ---@return boolean success
-  local function start_craft(jobID)
-    craft_logger:debug("Start craft called for job ID %u", jobID)
-    local job = pending_jobs[jobID]
+  local function startCraft(jobId)
+    craftLogger:debug("Start craft called for job ID %u", jobId)
+    local job = pendingJobs[jobId]
     if not job then
       return false
     end
-    local job_info = get_job_info(job)
-    if not job_info.success then
+    local jobInfo = getJobInfo(job)
+    if not jobInfo.success then
       return false -- cannot start unsuccessful job
     end
-    pending_jobs[jobID] = nil
-    job_lookup[jobID] = {}
-    run_on_all(job, function(node)
-      task_lookup[node.task_id] = node
-      table.insert(job_lookup[jobID], node)
+    pendingJobs[jobId] = nil
+    jobLookup[jobId] = {}
+    runOnAll(job, function(node)
+      taskLookup[node.taskId] = node
+      table.insert(jobLookup[jobId], node)
     end)
-    update_whole_tree(job)
+    updateWholeTree(job)
     return true
   end
 
-  local function json_file_import()
+  local function jsonFileImport()
     print("JSON file importing ready..")
     while true do
     local e, transfer = os.pullEvent("file_transfer")
@@ -800,7 +793,7 @@ init = function(loaded, config)
         local contents = file.readAll()
         local json = textutils.unserialiseJSON(contents)
         if json then
-          load_json(json)
+          loadJson(json)
         end
         file.close()
       end
@@ -809,31 +802,31 @@ init = function(loaded, config)
 
   return {
     start = function()
-      parallel.waitForAny(tick_crafting, inventory_transfer_listener, json_file_import)
+      parallel.waitForAny(tickCrafting, inventoryTransferListener, jsonFileImport)
     end,
 
-    request_craft = request_craft,
-    start_craft = start_craft,
-    load_json = load_json,
-    list_craftables = list_craftables,
-    cancel_craft = cancel_craft,
+    requestCraft = requestCraft,
+    startCraft = startCraft,
+    loadJson = loadJson,
+    listCraftables = listCraftables,
+    cancelCraft = cancelCraft,
 
     recipeInterface = {
-      change_node_state = change_node_state,
-      tick_node = tick_node,
-      get_best_item = get_best_item,
-      get_stack_size = get_stack_size,
-      merge_into = merge_into,
+      changeNodeState = changeNodeState,
+      tickNode = tickNode,
+      getBestItem = getBestItem,
+      getStackSize = getStackSize,
+      mergeInto = mergeInto,
       craft = craft,
-      push_items = push_items,
-      add_crafting_handler = add_crafting_handler,
-      add_ready_handler = add_ready_handler,
-      add_craft_type = add_craft_type,
-      delete_node_children = delete_node_children,
-      delete_task = delete_task,
-      get_or_cache_string = get_or_cache_string,
-      add_json_type_handler = add_json_type_handler,
-      add_craftable_list = add_craftable_list
+      pushItems = pushItems,
+      addCraftingHandler = addCraftingHandler,
+      addReadyHandler = addReadyHandler,
+      addCraftType = addCraftType,
+      deleteNodeChildren = deleteNodeChildren,
+      deleteTask = deleteTask,
+      getOrCacheString = getOrCacheString,
+      addJsonTypeHandler = addJsonTypeHandler,
+      addCraftableList = addCraftableList
     }
   }
 end

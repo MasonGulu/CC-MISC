@@ -112,53 +112,53 @@ end
 ---@alias handle table file handle
 ---@param f handle
 ---@param i integer
-local function write_uint16(f, i)
+local function writeUInt16(f, i)
   f.write(string.pack(">I2", i))
 end
 ---@param f handle
 ---@param i integer
-local function write_uint8(f, i)
+local function writeUInt8(f, i)
   f.write(string.pack("I1", i))
 end
 ---@param f handle
 ---@param str string
-local function write_string(f,str)
-  write_uint16(f, str:len())
+local function writeString(f,str)
+  writeUInt16(f, str:len())
   f.write(str)
 end
 
 ---@param f handle
 ---@param t table
-local function write_uint16_t(f,t)
-  write_uint8(f,#t)
+local function writeUInt16T(f,t)
+  writeUInt8(f,#t)
   for k,v in ipairs(t) do
-    write_uint16(f,v)
+    writeUInt16(f,v)
   end
 end
 
 ---@param f handle
 ---@return integer
-local function read_uint16(f)
+local function readUInt16(f)
   return select(1,string.unpack(">I2",f.read(2)))
 end
 ---@param f handle
 ---@return integer
-local function read_uint8(f)
+local function readUInt8(f)
   return select(1,string.unpack("I1",f.read(1)))
 end
 ---@param f handle
 ---@return string
-local function read_string(f)
+local function readString(f)
   local length = string.unpack(">I2", f.read(2))
   local str = f.read(length)
   return str
 end
 
-local function read_uint16_t(f)
-  local length = read_uint8(f)
+local function readUInt16T(f)
+  local length = readUInt8(f)
   local t = {}
   for i = 1, length do
-    t[i] = read_uint16(f)
+    t[i] = readUInt16(f)
   end
   return t
 end
@@ -169,12 +169,12 @@ return {
   printf = printf,
   f = f,
   layout = layout,
-  read_string = read_string,
-  read_uint16 = read_uint16,
-  read_uint16_t = read_uint16_t,
-  read_uint8 = read_uint8,
-  write_string = write_string,
-  write_uint16 = write_uint16,
-  write_uint16_t = write_uint16_t,
-  write_uint8 = write_uint8,
+  readString = readString,
+  readUInt16 = readUInt16,
+  readUInt16T = readUInt16T,
+  readUInt8 = readUInt8,
+  writeString = writeString,
+  writeUInt16 = writeUInt16,
+  writeUInt16T = writeUInt16T,
+  writeUInt8 = writeUInt8,
 }
