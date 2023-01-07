@@ -8,9 +8,8 @@ local modules = {
   "modules.inventory",
   "modules.crafting",
   "modules.grid",
-  -- "modules.rednet",
-  -- "modules.gui",
-  "modules.tui"
+  "modules.interface",
+  "modules.modem"
 }
 
 -- A module should return a table that contains at least the following fields
@@ -129,15 +128,19 @@ loaded.config = {
 }
 
 
----@type table array of functions to run all the modules
+---@type thread[] array of functions to run all the modules
 local moduleExecution = {}
+---@type table<thread,string|nil>
+local moduleFilters = {}
 for _,v in ipairs(moduleInitOrder) do
   local mod = loaded[v]
   if mod.init then
     local t0 = os.clock()
     -- The table returned by init will be placed into [id].interface
     loaded[mod.id].interface = mod.init(loaded, config)
-    table.insert(moduleExecution, loaded[mod.id].interface.start)
+    if loaded[mod.id].interface.start then
+      table.insert(moduleExecution, coroutine.create(loaded[mod.id].interface.start))
+    end
     printf("Initialized %s in %.2f seconds", mod.id, os.clock() - t0)
   else
     printf("Failed to initialize %s, no init function", mod.id)
@@ -145,4 +148,22 @@ for _,v in ipairs(moduleInitOrder) do
 end
 
 print("Starting execution...")
-parallel.waitForAny(table.unpack(moduleExecution))
+while true do
+  local e = table.pack(os.pullEventRaw())
+  if e[1] == "terminate" then
+    print("Terminated.")
+    break
+  end
+  for i, co in ipairs(moduleExecution) do
+    if not moduleFilters[co] or moduleFilters[co] == "" or moduleFilters[co] == e[1] then
+      local ok, filter = coroutine.resume(co, table.unpack(e))
+      if not ok then
+        print("Module errored!")
+        print(filter)
+        print(debug.traceback(co))
+        return
+      end
+      moduleFilters[co] = filter
+    end
+  end
+end
