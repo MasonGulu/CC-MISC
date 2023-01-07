@@ -76,12 +76,12 @@ local charStateLookup = {
   ["-"] = "\\",
   ["\\"] = "|",
 }
-local last_char_update = os.epoch("utc")
-local function get_activity_char()
-  if os.epoch("utc") - last_char_update < 50 then
+local lastCharUpdate = os.epoch("utc")
+local function getActivityChar()
+  if os.epoch("utc") - lastCharUpdate < 50 then
     return lastChar
   end
-  last_char_update = os.epoch("utc")
+  lastCharUpdate = os.epoch("utc")
   lastChar = charStateLookup[lastChar]
   return lastChar
 end
@@ -103,21 +103,21 @@ local function writeBanner()
   banner.write(state)
   term.setCursorPos(x,y)
 
-  local to_display = state
+  local toDisplay = state
   if not connected then
-    to_display = "!"..to_display
+    toDisplay = "!"..toDisplay
   end
 
   os.setComputerLabel(
-    ("%s %s - %s"):format(get_activity_char(), networkName, to_display))
+    ("%s %s - %s"):format(getActivityChar(), networkName, toDisplay))
 end
 local function keepAlive()
   while true do
-    local modem_message = getModemMessage(function(message)
+    local modemMessage = getModemMessage(function(message)
       return validateMessage(message) and message.protocol == "KEEP_ALIVE"
     end, keepAliveTimeout)
-    connected = modem_message ~= nil
-    if modem_message then
+    connected = modemMessage ~= nil
+    if modemMessage then
       modem.transmit(port, port, {
         protocol = "KEEP_ALIVE",
         state = state,
@@ -129,10 +129,10 @@ local function keepAlive()
   end
 end
 local function colWrite(fg, text)
-  local old_fg = term.getTextColor()
+  local oldFg = term.getTextColor()
   term.setTextColor(fg)
   term.write(text)
-  term.setTextColor(old_fg)
+  term.setTextColor(oldFg)
 end
 
 ---@param newState State
@@ -204,8 +204,8 @@ local function tryToCraft()
       break
     else
       readyToCraft = readyToCraft and turtleInventory[turtleSlot].count == v.count
-      local error_free = turtleInventory[turtleSlot].name == v.name
-      if not error_free then
+      local errorFree = turtleInventory[turtleSlot].name == v.name
+      if not errorFree then
         state = STATES.ERROR
         return
       end
@@ -246,8 +246,8 @@ local function turtleInventoryEvent()
     elseif state == STATES.DONE then
       -- check if the items have been removed from the inventory
       refreshTurtleInventory()
-      local empty_inv = not next(turtleInventory)
-      if empty_inv then
+      local emptyInv = not next(turtleInventory)
+      if emptyInv then
         changeState(STATES.READY)
       end
     end

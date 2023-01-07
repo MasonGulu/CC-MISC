@@ -149,7 +149,9 @@ end
 
 print("Starting execution...")
 while true do
+  local timerId = os.startTimer(0)
   local e = table.pack(os.pullEventRaw())
+  os.cancelTimer(timerId)
   if e[1] == "terminate" then
     print("Terminated.")
     break

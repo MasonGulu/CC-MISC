@@ -756,9 +756,9 @@ init = function(loaded, config)
   ---@param count integer
   ---@return jobInfo
   local function requestCraft(name,count)
-    local jobID = createCraftJob(name,count)
-    craftLogger:debug("Request craft called for %u %s(s), returning job ID %u", count, name, jobID)
-    return getJobInfo(pendingJobs[jobID])
+    local jobId = createCraftJob(name,count)
+    craftLogger:debug("Request craft called for %u %s(s), returning job ID %s", count, name, jobId)
+    return getJobInfo(pendingJobs[jobId])
   end
 
   ---Start a given job, if it's pending

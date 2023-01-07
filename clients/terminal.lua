@@ -138,19 +138,34 @@ local function changeMode(new_mode)
       end
     end
     disableDrawing = false
+  elseif new_mode == "INFO" then
+    displayItem = siftedList[selectedItem]
+    itemAmount = tostring(math.min(displayItem.maxCount, displayItem.count))
   end
   mode = new_mode
 end
 
+local function getFirstItemOnScreen(item, list)
+  return math.max(math.min(math.max(1,item-5), #list-h+4), 1)
+end
 
-local draw_modes = {
+local function getLastItemOnScreen(item, list)
+  local scroll = getFirstItemOnScreen(item,list)
+  return math.min(scroll+h+1, #list)
+end
+
+local function getYWithScroll(scroll, item)
+  return 4 - scroll + item
+end
+
+local drawModes = {
   SEARCH = function ()
     text(1,2,filter)
     text(1,3,formatItem("Name","Count"))
-    local screenScroll = math.max(math.min(math.max(1,selectedItem-5), #siftedList-h+4), 1)
-    for i=screenScroll, math.min(screenScroll+h, #siftedList) do
+    local screenScroll = getFirstItemOnScreen(selectedItem, siftedList)
+    for i=screenScroll, getLastItemOnScreen(screenScroll, siftedList) do
       local item = siftedList[i]
-      local y = 4 + i - screenScroll
+      local y = getYWithScroll(screenScroll, i)
       if y > 3 then
         if i == selectedItem then
           setColors(colors.black,colors.white)
@@ -180,10 +195,10 @@ local draw_modes = {
   CRAFT = function ()
     text(1,2,craftFilter)
     text(1,3,"Name")
-    local screenScroll = math.max(math.min(math.max(1,selectedCraft-5), #siftedCraftables-h+4), 1)
-    for i=screenScroll, math.min(screenScroll+h, #siftedCraftables) do
+    local screenScroll = getFirstItemOnScreen(selectedCraft, siftedCraftables)
+    for i=screenScroll, getLastItemOnScreen(screenScroll, siftedCraftables) do
       local name = siftedCraftables[i]
-      local y = 4 + i - screenScroll
+      local y = getYWithScroll(screenScroll, i)
       if y > 3 then
         if i == selectedCraft then
           setColors(colors.black,colors.white)
@@ -228,7 +243,7 @@ local draw_modes = {
 }
 
 local function draw()
-  if draw_modes[mode] and not disableDrawing then
+  if drawModes[mode] and not disableDrawing then
     display.setVisible(false)
     display.setCursorBlink(false)
     display.clear()
@@ -237,7 +252,7 @@ local function draw()
     display.clearLine()
     display.write(mode)
     setColors(colors.white,colors.black)
-    draw_modes[mode]()
+    drawModes[mode]()
     display.setVisible(true)
   end
 end
@@ -297,18 +312,18 @@ local function requestItem(item,amount)
   end
   amount = math.min(amount, item.count)
   local stacks = math.min(math.ceil(amount / item.maxCount),16)
-  local free_slots = {}
+  local freeSlots = {}
   for i = 1, 16 do
-    free_slots[i] = true
+    freeSlots[i] = true
   end
   for i,_ in pairs(turtleInventory) do
-    free_slots[i] = nil
+    freeSlots[i] = nil
   end
   for i = 1, stacks do
-    local slot = next(free_slots)
+    local slot = next(freeSlots)
     if not slot then break end -- not enough space in the turtle to fit all of the items
     busySlots[slot] = true
-    free_slots[slot] = nil
+    freeSlots[slot] = nil
   end
   lib.pushItems(true,selfName,item.name,amount,nil,item.nbt)
   lib.performTransfer()
@@ -326,9 +341,6 @@ local keyModes = {
     elseif key == keys.enter then
       if selectedItem > 0 then
         changeMode("INFO")
-        -- this can easily become outdated if the contents of the storage change
-        displayItem = siftedList[selectedItem]
-        itemAmount = tostring(math.min(displayItem.maxCount, displayItem.count))
       end
     elseif key == keys.tab then
       changeMode("CRAFT")
@@ -365,7 +377,7 @@ local keyModes = {
     
   end
 }
-local function handle_key(key)
+local function handleKey(key)
   assert(keyModes[mode], "Missing key_mode "..mode)(key)
 end
 
@@ -375,7 +387,21 @@ local function inputHandler()
     if e[1] == "char" then
       handleChar(e[2])
     elseif e[1] == "key" then
-      handle_key(e[2])
+      handleKey(e[2])
+    elseif e[1] == "mouse_click" then
+      if mode == "SEARCH" then
+        selectedItem = getFirstItemOnScreen(selectedItem, siftedList) + e[4] - 4
+        changeMode("INFO")
+      elseif mode == "CRAFT" then
+        selectedCraft = getFirstItemOnScreen(selectedCraft, siftedCraftables) + e[4] - 4
+        changeMode("REQUEST")
+      end
+    elseif e[1] == "mouse_scroll" then
+      if mode == "SEARCH" then
+        selectedItem = math.max(math.min(selectedItem + e[2], #siftedList), 1)
+      elseif mode == "CRAFT" then
+        selectedCraft = math.max(math.min(selectedCraft + e[2], #siftedCraftables), 1)
+      end
     end
     draw()
   end
@@ -383,9 +409,3 @@ end
 
 draw()
 parallel.waitForAll(lib.subscribe, eventTurtleInventory, eventUpdate, inputHandler)
-
--- support your
-local small
--- business casino
-
--- << Across the bridge <<
