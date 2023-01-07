@@ -342,6 +342,7 @@ init = function(loaded, config)
     ---@type CraftingNode[]
     local nodes = {}
     local remaining = count
+    craft_logger:debug("Remaining craft count for %s is %u", name, remaining)
     while remaining > 0 do
       ---@type CraftingNode
       local node = {
@@ -764,6 +765,7 @@ init = function(loaded, config)
   ---@return jobInfo
   local function request_craft(name,count)
     local jobID = create_craft_job(name,count)
+    craft_logger:debug("Request craft called for %u %s(s), returning job ID %u", count, name, jobID)
     return get_job_info(pending_jobs[jobID])
   end
 
@@ -771,6 +773,7 @@ init = function(loaded, config)
   ---@param jobID jobID
   ---@return boolean success
   local function start_craft(jobID)
+    craft_logger:debug("Start craft called for job ID %u", jobID)
     local job = pending_jobs[jobID]
     if not job then
       return false
