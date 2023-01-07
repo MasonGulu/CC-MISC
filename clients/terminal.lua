@@ -329,6 +329,10 @@ local function requestItem(item,amount)
   lib.performTransfer()
 end
 
+local function isEnter(key)
+  return key == keys.enter or key == keys.numPadEnter
+end
+
 local keyModes = {
   SEARCH = function (key)
     if key == keys.backspace then
@@ -338,7 +342,7 @@ local keyModes = {
       selectedItem = math.max(selectedItem - 1, 1)
     elseif key == keys.down then
       selectedItem = math.min(selectedItem + 1, #siftedList)
-    elseif key == keys.enter or keys.numPadEnter then
+    elseif isEnter(key) then
       if selectedItem > 0 then
         changeMode("INFO")
       end
@@ -349,7 +353,7 @@ local keyModes = {
   INFO = function (key)
     if key == keys.backspace then
       itemAmount = itemAmount:sub(1, -2)
-    elseif key == keys.enter or key == keys.numPadEnter then
+    elseif isEnter(key) then
       requestItem(displayItem,tonumber(itemAmount or 0))
       changeMode("SEARCH")
     end
@@ -362,7 +366,7 @@ local keyModes = {
       selectedCraft = math.max(selectedCraft - 1, 1)
     elseif key == keys.down then
       selectedCraft = math.min(selectedCraft + 1, #siftedCraftables)
-    elseif key == keys.enter then
+    elseif isEnter(key) then
       if selectedCraft > 0 then
         displayItem = {name=siftedCraftables[selectedCraft], count = 10000} -- TODO
         requestingCraft = true
