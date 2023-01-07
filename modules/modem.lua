@@ -12,7 +12,7 @@ config = {
     description = "Port to host communication on",
     default=50
   },
-  update_port = {
+  updatePort = {
     type = "number",
     description = "Port to send storage content updates on",
     default=51
@@ -22,7 +22,7 @@ init = function(loaded, config)
   local log = loaded.logger
   local logger = setmetatable({}, {__index=function () return function () end end})
   local port = config.modem.port.value
-  local update_port = config.modem.update_port.value
+  local updatePort = config.modem.updatePort.value
   if log then
     logger = log.interface.logger("modem","main")
   end
@@ -32,7 +32,7 @@ init = function(loaded, config)
   modem.open(port)
 
   local function handleUpdate(list)
-    modem.transmit(update_port, port, {
+    modem.transmit(updatePort, port, {
       list = list,
       protocol = "storage_system_update",
       destination = "*",
@@ -41,13 +41,13 @@ init = function(loaded, config)
   end
   loaded.interface.interface.addInventoryUpdateHandler(handleUpdate)
 
-  local function validate_message(message)
+  local function validateMessage(message)
     local valid = type(message) == "table" and message.protocol ~= nil
     valid = valid and (message.destination == "HOST")
     valid = valid and message.source ~= nil
     return valid
   end
-  local function get_modem_message(filter, timeout)
+  local function getModemMessage(filter, timeout)
     local timer
     if timeout then
       timer = os.startTimer(timeout)
@@ -72,7 +72,7 @@ init = function(loaded, config)
     end
   end
 
-  local function handle_message(event)
+  local function handleMessage(event)
     if not event then return end
     local message = event.message
     local response = table.pack(loaded.interface.interface.callMethod(message.method, message.args))
@@ -87,11 +87,11 @@ init = function(loaded, config)
 
   interface.start = function()
     while true do
-      local event = get_modem_message(validate_message)
+      local event = getModemMessage(validateMessage)
       assert(event, "Got no message??")
       local message = event.message
       if message.protocol == "storage_system_modem" and message.method and message.args then
-        handle_message(event)
+        handleMessage(event)
       end
     end
   end

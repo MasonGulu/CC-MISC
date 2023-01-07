@@ -39,14 +39,14 @@ init=function (loaded,config)
         local item = loaded.inventory.interface.getItem(name,nbt)
         if item then
           item = item.item
-          local item_clone = {}
+          local itemClone = {}
           for k,v in pairs(item) do
-            item_clone[k] = v
+            itemClone[k] = v
           end
-          item_clone.name = name
-          item_clone.nbt = nbt
-          item_clone.count = loaded.inventory.interface.getCount(name,nbt)
-          table.insert(list,item_clone)
+          itemClone.name = name
+          itemClone.nbt = nbt
+          itemClone.count = loaded.inventory.interface.getCount(name,nbt)
+          table.insert(list,itemClone)
         end
       end
     end
@@ -62,19 +62,19 @@ init=function (loaded,config)
     if not loaded.crafting then
       return {}
     end
-    return loaded.crafting.interface.list_craftables()
+    return loaded.crafting.interface.listCraftables()
   end
 
   function genericInterface.requestCraft(name, count)
-    return loaded.crafting.interface.request_craft(name,count)
+    return loaded.crafting.interface.requestCraft(name,count)
   end
 
   function genericInterface.startCraft(jobID)
-    return loaded.crafting.interface.start_craft(jobID)
+    return loaded.crafting.interface.startCraft(jobID)
   end
 
   function genericInterface.cancelCraft(jobID)
-    return loaded.crafting.interface.cancel_craft(jobID)
+    return loaded.crafting.interface.cancelCraft(jobID)
   end
 
   local interface = {}

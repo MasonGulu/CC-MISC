@@ -33,13 +33,13 @@ init = function (loaded, config)
   end
   ---@alias level "DEBUG"|"INFO"|"WARN"|"ERROR"
   ---@type table<level,integer>
-  local level_int = {
+  local levelInt = {
     DEBUG = 1,
     INFO = 2,
     WARN = 3,
     ERROR = 4,
   }
-  local min_level = level_int[config.logger.level.value]
+  local minLevel = levelInt[config.logger.level.value]
 
   ---Log a sring
   ---@param level level
@@ -47,7 +47,7 @@ init = function (loaded, config)
   local log = function(self, level, msg)
     if not config.logger.enable.value then
       return
-    elseif level_int[level] < min_level then
+    elseif levelInt[level] < minLevel then
       return
     end
     local f = assert(fs.open(config.logger.file.value, "a"), "Cannot open log file")
@@ -63,7 +63,7 @@ init = function (loaded, config)
     self:log(level, f:format(...))
   end
 
-  local logger_meta = {
+  local loggerMetta = {
     log = log,
     logf = logf,
     debug = function(self,f,...)
@@ -84,7 +84,7 @@ init = function (loaded, config)
     return setmetatable({
       module = module,
       thread = thread,
-    }, {__index=logger_meta})
+    }, {__index=loggerMetta})
   end
   return {
     logger = logger
