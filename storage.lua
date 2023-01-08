@@ -132,6 +132,8 @@ loaded.config = {
 local moduleExecution = {}
 ---@type table<thread,string|nil>
 local moduleFilters = {}
+---@type string[]
+local moduleIds = {}
 for _,v in ipairs(moduleInitOrder) do
   local mod = loaded[v]
   if mod.init then
@@ -140,11 +142,42 @@ for _,v in ipairs(moduleInitOrder) do
     loaded[mod.id].interface = mod.init(loaded, config)
     if loaded[mod.id].interface.start then
       table.insert(moduleExecution, coroutine.create(loaded[mod.id].interface.start))
+      table.insert(moduleIds, mod.id)
     end
     printf("Initialized %s in %.2f seconds", mod.id, os.clock() - t0)
   else
     printf("Failed to initialize %s, no init function", mod.id)
   end
+end
+
+---Save a crash report
+---@param module string module name that crashed
+---@param stacktrace string module stacktrace
+---@param error string
+local function saveCrashReport(module, stacktrace, error)
+  local f, reason = fs.open("crash.txt","w")
+  if not f then
+    print("Unable to save crash report!")
+    print(reason)
+    return
+  end
+  f.write("===MISC Crash Report===\n")
+  f.write(("Generated on %s\n"):format(os.date()))
+  f.write(("There were %u modules loaded.\n"):format(#modules))
+  for k,v in pairs(loaded) do
+    if k ~= "config" then
+      local icon = "-"
+      if v.id == module then
+        icon = "*"
+      end
+      f.write(("%s %s v%s\n"):format(icon,v.id,v.version))
+    end
+  end
+  f.write("--- ERROR\n")
+  f.write(error)
+  f.write("\n--- STACKTRACE\n")
+  f.write(stacktrace)
+  f.close()
 end
 
 print("Starting execution...")
@@ -154,15 +187,14 @@ while true do
   os.cancelTimer(timerId)
   if e[1] == "terminate" then
     print("Terminated.")
-    break
+    return
   end
   for i, co in ipairs(moduleExecution) do
     if not moduleFilters[co] or moduleFilters[co] == "" or moduleFilters[co] == e[1] then
       local ok, filter = coroutine.resume(co, table.unpack(e))
       if not ok then
-        print("Module errored!")
-        print(filter)
-        print(debug.traceback(co))
+        print("Module errored, saving crash report..")
+        saveCrashReport(moduleIds[i], debug.traceback(co), filter)
         return
       end
       moduleFilters[co] = filter

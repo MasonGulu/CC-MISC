@@ -279,10 +279,16 @@ init = function(loaded,config)
     local plan = {}
     for k,v in pairs(recipe.recipe) do
       if v ~= 0 then
-        plan[k] = {name = crafting.getBestItem(v)}
-        plan[k].max = crafting.getStackSize(plan[k].name)
-        toCraft = math.min(toCraft, plan[k].max)
-        -- We can only craft as many items as the smallest stack size allows us to
+        local success, itemName = crafting.getBestItem(v)
+        plan[k] = {}
+        if success then
+          plan[k].name = itemName
+          -- We can only craft as many items as the smallest stack size allows us to
+          plan[k].max = crafting.getStackSize(plan[k].name)
+          toCraft = math.min(toCraft, plan[k].max)
+        else
+          plan[k].tag = itemName
+        end
       end
     end
     node.plan = plan
@@ -291,7 +297,12 @@ init = function(loaded,config)
     node.name = name
     for k,v in pairs(plan) do
       v.count = toCraft
-      crafting.mergeInto(crafting.craft(v.name, v.count, node.jobId, nil, requestChain), node.children)
+      if v.tag then
+        -- this is a tag we could not resolve, so make a placeholder node
+        table.insert(node.children, crafting.createMissingNode(v.tag, v.count, node.jobId))
+      else
+        crafting.mergeInto(crafting.craft(v.name, v.count, node.jobId, nil, requestChain), node.children)
+      end
     end
     for k,v in pairs(node.children) do
       v.parent = node

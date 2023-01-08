@@ -212,7 +212,8 @@ init = function(loaded, config)
   end
 
   ---@type table<string,string[]> tag -> item names
-  local cachedTagLookup = {}
+  local cachedTagLookup = common.loadTableFromFile(".cache/cached_tags.txt") or {}
+  
   -- TODO load this
   ---@type table<string,table<string,boolean>> tag -> item name -> is it in cached_tag_lookup
   local cachedTagPresence = {}
@@ -225,10 +226,11 @@ init = function(loaded, config)
 
   ---Select the best item from a tag
   ---@param tag string
+  ---@return boolean success
   ---@return string itemName
   local function selectBestFromTag(tag)
     if config.crafting.tagLookup.value[tag] then
-      return config.crafting.tagLookup.value[tag]
+      return true, config.crafting.tagLookup.value[tag]
     end
     if not cachedTagPresence[tag] then
       cachedTagPresence[tag] = {}
@@ -239,47 +241,66 @@ init = function(loaded, config)
     local itemsWithTagsCount = {}
     for k,v in ipairs(itemsWithTag) do
       if not cachedTagPresence[tag][v] then
+        -- update the cache if it's not in there already
         cachedTagPresence[tag][v] = true
         table.insert(cachedTagLookup[tag], v)
+        common.saveTableToFile(".cache/cached_tags.txt", cachedTagLookup)
       end
       itemsWithTagsCount[k] = {name=v, count=loaded.inventory.interface.getCount(v)}
     end
     table.sort(itemsWithTagsCount, function(a,b) return a.count > b.count end)
     if itemsWithTagsCount[1] then
-      return itemsWithTagsCount[1].name
+      return true, itemsWithTagsCount[1].name
     end
+
     -- then check if we can craft anything (todo)
-    error("Not yet implemented")
+    local craftableList = listCraftables()
+    local isCraftableLUT = {}
+    for k,v in pairs(craftableList) do
+      isCraftableLUT[v] = true
+    end
+
+    for k,v in pairs(cachedTagLookup[tag]) do
+      if isCraftableLUT[v] then
+        return true, v -- this is not the best way of doing this.
+      end
+    end
+
+    -- no solution found
+    return false, tag
   end
 
   ---Select the best item from an index
   ---@param index ItemIndex
+  ---@return boolean success
   ---@return string itemName
   local function selectBestFromIndex(index)
     local itemInfo = assert(itemLookup[index], "Invalid item index")
     if itemInfo.tag then
       return selectBestFromTag(itemInfo[1])
     end
-    return itemInfo[1]
+    return true, itemInfo[1]
   end
 
   ---Select the best item from a list of ItemIndex
   ---@param list ItemIndex[]
+  ---@return boolean success
   ---@return string itemName
   local function selectBestFromList(list)
-    return itemLookup[list[1]][1]
+    return true, itemLookup[list[1]][1]
   end
 
   ---Select the best item
   ---@param item ItemIndex[]|ItemIndex
-  ---@return string itemName
+  ---@return boolean success
+  ---@return string name itemname if success, otherwise tag
   local function getBestItem(item)
     if type(item) == "table" then
       return selectBestFromList(item)
     elseif type(item) == "number" then
       return selectBestFromIndex(item)
     end
-    error("hah not any")
+    error("Invalid type "..type(item),2)
   end
 
   ---Merge from into the end of to
@@ -321,6 +342,16 @@ init = function(loaded, config)
     requestCraftTypes[type] = func
   end
 
+  local function createMissingNode(name, count, jobId)
+    return {
+      name = name,
+      jobId = jobId,
+      taskId = id(),
+      count = count,
+      type = "MISSING"
+    }
+  end
+
   ---@param name string item name
   ---@param count integer
   ---@param jobId string
@@ -330,13 +361,7 @@ init = function(loaded, config)
   function craft(name, count, jobId, force, requestChain)
     requestChain = shallowClone(requestChain or {})
     if requestChain[name] then
-      return {{
-        name = name,
-        taskId = id(),
-        jobId = jobId,
-        type = "MISSING",
-        count = count,
-      }}
+      return {createMissingNode(name,count,jobId)}
     end
     requestChain[name] = true
     ---@type CraftingNode[]
@@ -371,8 +396,7 @@ init = function(loaded, config)
         end
         if not success then
           craftLogger:debug("No recipe found for %s", name)
-          node.count = remaining
-          node.type = "MISSING"
+          node = createMissingNode(name, remaining, jobId)
         end
         remaining = remaining - node.count
       end
@@ -832,7 +856,8 @@ init = function(loaded, config)
       deleteTask = deleteTask,
       getOrCacheString = getOrCacheString,
       addJsonTypeHandler = addJsonTypeHandler,
-      addCraftableList = addCraftableList
+      addCraftableList = addCraftableList,
+      createMissingNode = createMissingNode,
     }
   }
 end

@@ -88,19 +88,4 @@ Then each module's `init` function is called, and anything returned is placed in
 Then to conclude each module that provided a `start` function in the `interface` is called in parallel.
 
 # Module Specific Documentation
-
-## `modules/inventory.lua`
-This module is the backbone of the *storage* system. It uses `abstractInvLib` to manage the main storage capacity of the network. This module also manages a queue of transfers, so they may be done asyncronously and in bulk.
-
-This module provides all method provided by `abstractInvLib`. But `pushItems` and `pullItems` take an additional boolean argument before the normal args, signifying whether to do the transfer asyncronously. For most purposes you should not do transfers syncronously.
-
-## `modules/logger.lua`
-This module provides a logging object constructor at `loaded.logger.interface.logger`
-
-## `modules/interface.lua`
-This module provides a generic external interface api. Currently the only interface is `modules/modem.lua`
-
-## `modules/crafting.lua`
-This module handles crafting, including generating crafting trees automatically from a given item name.
-
-It also provides an interface for custom crafting providers. The only current crafting provider is `modules/grid.lua` which provides grid crafting.
+Look in `/docs/` for module specific documentation.
