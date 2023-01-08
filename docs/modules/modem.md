@@ -1,3 +1,7 @@
+---
+title: '`modem.lua`'
+parent: Modules
+---
 # `modem.lua`
 This module uses `interface.lua` to provide the generic methods over modem. `clients/modemLib.lua` is a simple wrapper for this interface.
 

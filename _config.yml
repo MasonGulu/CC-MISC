@@ -1,0 +1,14 @@
+remote_theme: just-the-docs/just-the-docs
+title: "MISC Documentation"
+exclude:
+  - 'CNAME'
+  - '.git*'
+  - '*.lua'
+  - '*.yml'
+  - '*.yaml'
+  - '*.toml'
+aux_links:
+  "GitHub":
+    - "//github.com/MasonGulu/Storage-System"
+  "Roadmap":
+    - "//github.com/users/MasonGulu/projects/1/views/1"

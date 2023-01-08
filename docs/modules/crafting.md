@@ -1,3 +1,7 @@
+---
+title: '`crafting.lua`'
+parent: Modules
+---
 # `crafting.lua`
 This is the module that controls autocrafting. It however provides no real usage on its own, currently the only available module is `grid.lua`, however `machine.lua` is also planned.
 
@@ -45,7 +49,7 @@ When a craft is requested `recipeInterface.craft` is called. This starting call 
 A craft node has multiple states, when the crafting system is ticked the corrosponding handler for each node type and state is called.
 
 Here's a chart of crafting node states
-![Crafting Node States](crafting_node_states.png)
+![Crafting Node States](/assets/crafting_node_states.png)
 
 Here's an example of a generated crafting tree
-![Example Crafting Tree](example_crafting_tree.png)
+![Example Crafting Tree](/assets/example_crafting_tree.png)
