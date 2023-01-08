@@ -1,3 +1,7 @@
+---
+title: '`logger.md`'
+parent: Modules
+---
 # `logger.md`
 This module provides a simple interface to log information. It supports 4 levels of logs (DEBUG, INFO, WARN, ERROR), and the minimum log level can be specified.
 
