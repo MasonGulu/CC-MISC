@@ -86,6 +86,12 @@ init=function (loaded,config)
     return loaded.grid.interface.addGridRecipe(name,produces,recipe,shaped)
   end
 
+  ---Get the slot usage of this inventory
+  ---@return {free: integer, used:integer, total:integer}
+  function genericInterface.getUsage()
+    return loaded.inventory.interface.getUsage()
+  end
+
   local interface = {}
   local inventoryUpdateHandlers = {}
   ---Add a handler for the inventoryUpdate event

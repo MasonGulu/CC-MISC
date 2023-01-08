@@ -135,4 +135,8 @@ function lib.addGridRecipe(name,produces,recipe,shaped)
   return interface("addGridRecipe", name, produces, recipe, shaped)
 end
 
+function lib.getUsage()
+  return interface("getUsage")
+end
+
 return lib

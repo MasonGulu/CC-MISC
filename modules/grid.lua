@@ -104,6 +104,11 @@ init = function(loaded,config)
     crafting.addCraftableList("grid", list)
   end
 
+  ---Add a grid recipe manually
+  ---@param name string
+  ---@param produces integer
+  ---@param recipe string[] table of ITEM NAMES, this does NOT support tags. Shaped recipes are assumed 3x3. Nil is assumed empty space.
+  ---@param shaped boolean
   local function addGridRecipe(name, produces, recipe, shaped)
     common.enforceType(name,1,"string")
     common.enforceType(produces,2,"integer")
@@ -434,12 +439,7 @@ init = function(loaded,config)
       -- loaded.crafting.interface.request_craft("minecraft:piston", 128)
       parallel.waitForAny(modemMessageHandler, keepAlive)
     end,
-    ---Add a grid recipe manually
-    ---@param name string
-    ---@param produces integer
-    ---@param recipe string[] table of ITEM NAMES, this does NOT support tags. Shaped recipes are assumed 3x3. Nil is assumed empty space.
-    ---@param shaped boolean
-    
+    addGridRecipe = addGridRecipe
   }
 end
 }

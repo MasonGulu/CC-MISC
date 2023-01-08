@@ -868,6 +868,19 @@ function abstractInventory(inventories, assumeLimits)
     return t
   end
 
+  ---Get the slot usage of this inventory
+  ---@return {free: integer, used:integer, total:integer}
+  function api.getUsage()
+    local ret = {}
+    ret.total = #slotNumberLUT
+    ret.used = 0
+    for i,_ in pairs(api.list()) do
+      ret.used = ret.used + 1
+    end
+    ret.free = ret.total - ret.used
+    return ret
+  end
+
   ---Get the amount of slots in this inventory
   ---@return integer
   function api.size()
