@@ -3,9 +3,7 @@ local modem = peripheral.find("modem", function(name, modem)
   -- return not modem.isWireless()
   return true
 end)
-local modemLib = require("modemLib")
 local modemName = peripheral.getName(modem)
-modemLib.connect(modemName)
 rednet.open(modemName)
 local networkName = modem.getNameLocal()
 ---@enum State
@@ -288,7 +286,15 @@ local function addRecipe(shaped)
     crafted = item.name
     amount = amount + item.count
   end
-  modemLib.addGridRecipe(crafted, amount, recipe, shaped)
+  modem.transmit(port, port, {
+    protocol = "NEW_RECIPE",
+    destination = "HOST",
+    source = networkName,
+    name = crafted,
+    amount = amount,
+    recipe = recipe,
+    shaped = shaped
+  })
 end
 
 local interfaceLUT

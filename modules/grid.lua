@@ -104,6 +104,33 @@ init = function(loaded,config)
     crafting.addCraftableList("grid", list)
   end
 
+  local function addGridRecipe(name, produces, recipe, shaped)
+    common.enforceType(name,1,"string")
+    common.enforceType(produces,2,"integer")
+    common.enforceType(recipe,3,"string[]")
+    common.enforceType(shaped,4,"boolean")
+    local gridRecipe = {}
+    gridRecipe.shaped = shaped
+    gridRecipe.produces = produces
+    gridRecipe.recipe = {}
+    if shaped then
+      for i = 1, 9 do
+        local itemName = recipe[i]
+        gridRecipe.recipe[i] = (itemName and crafting.getOrCacheString(itemName)) or 0
+      end
+      gridRecipe.width = 3
+      gridRecipe.height = 3
+    else
+      for k,v in ipairs(recipe) do
+        table.insert(gridRecipe.recipe, crafting.getOrCacheString(v))
+      end
+    end
+    gridRecipes[name] = gridRecipe
+    cacheAdditional(gridRecipe)
+    saveGridRecipes()
+    updateCraftableList()
+  end
+
   ---Load the grid recipes from a file
   local function loadGridRecipes()
     local f = assert(fs.open("recipes/grid_recipes.bin", "rb"))
@@ -189,6 +216,9 @@ init = function(loaded,config)
       local turtle = attachedTurtles[message.source]
       turtle.itemSlots = message.itemSlots
       emptyTurtle(turtle)
+    end,
+    NEW_RECIPE = function (message)
+      addGridRecipe(message.name,message.amount,message.recipe,message.shaped)
     end
   }
 
@@ -409,30 +439,7 @@ init = function(loaded,config)
     ---@param produces integer
     ---@param recipe string[] table of ITEM NAMES, this does NOT support tags. Shaped recipes are assumed 3x3. Nil is assumed empty space.
     ---@param shaped boolean
-    addGridRecipe = function (name, produces, recipe, shaped)
-      common.enforceType(name,1,"string")
-      common.enforceType(produces,2,"integer")
-      common.enforceType(recipe,3,"string[]")
-      common.enforceType(shaped,4,"boolean")
-      local gridRecipe = {}
-      gridRecipe.shaped = shaped
-      gridRecipe.produces = produces
-      gridRecipe.recipe = {}
-      if shaped then
-        for i = 1, 9 do
-          local itemName = recipe[i]
-          gridRecipe.recipe[i] = (itemName and crafting.getOrCacheString(itemName)) or 0
-        end
-        gridRecipe.width = 3
-        gridRecipe.height = 3
-      else
-        for k,v in ipairs(recipe) do
-          table.insert(gridRecipe.recipe, crafting.getOrCacheString(v))
-        end
-      end
-      gridRecipes[name] = gridRecipe
-      saveGridRecipes()
-    end
+    
   }
 end
 }
