@@ -261,11 +261,10 @@ init = function(loaded,config)
   ---comment
   ---@param node GridRecipe
   ---@param name string
-  ---@param jobId string
   ---@param count integer
   ---@param requestChain table Do not modify, just pass through to calls to craft
   ---@return boolean
-  local function craftType(node,name,jobId,count,requestChain)
+  local function craftType(node,name,count,requestChain)
     -- attempt to craft this
     local recipe = gridRecipes[name]
     if not recipe then
@@ -292,7 +291,7 @@ init = function(loaded,config)
     node.name = name
     for k,v in pairs(plan) do
       v.count = toCraft
-      crafting.mergeInto(crafting.craft(v.name, v.count, jobId, nil, requestChain), node.children)
+      crafting.mergeInto(crafting.craft(v.name, v.count, node.jobId, nil, requestChain), node.children)
     end
     for k,v in pairs(node.children) do
       v.parent = node

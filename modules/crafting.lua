@@ -315,7 +315,7 @@ init = function(loaded, config)
     craftLogger = log.interface.logger("crafting","request_craft")
   end
   local craft
-  ---@type table<string,fun(node:CraftingNode,name:string,jobId:string,count:integer,request_chain:table):boolean>
+  ---@type table<string,fun(node:CraftingNode,name:string,count:integer,request_chain:table):boolean>
   local requestCraftTypes = {}
   local function addCraftType(type, func)
     requestCraftTypes[type] = func
@@ -362,7 +362,7 @@ init = function(loaded, config)
       else
         local success = false
         for k,v in pairs(requestCraftTypes) do
-          success = v(node, name, jobId, remaining, requestChain)
+          success = v(node, name, remaining, requestChain)
           if success then
             craftLogger:debug("Recipe. provider:%s,name:%s,count:%u,taskId:%s,jobId:%s", k, name, node.count, node.taskId, jobId)
             craftLogger:info("Recipe for %s was provided by %s", name, k)
@@ -652,7 +652,10 @@ init = function(loaded, config)
       pendingJobs[jobId] = nil
       return
     end
-    for k,v in pairs(jobLookup[jobId]) do
+    if not jobLookup[jobId] then
+      craftLogger:warn("Attempt to cancel non-existant job %s", jobId)
+    end
+    for k,v in pairs(jobLookup[jobId] or {}) do
       cancelTask(v.taskId)
     end
     jobLookup[jobId] = nil
@@ -758,7 +761,11 @@ init = function(loaded, config)
   local function requestCraft(name,count)
     local jobId = createCraftJob(name,count)
     craftLogger:debug("Request craft called for %u %s(s), returning job ID %s", count, name, jobId)
-    return getJobInfo(pendingJobs[jobId])
+    local jobInfo = getJobInfo(pendingJobs[jobId])
+    if not jobInfo.success then
+      cancelCraft(jobId)
+    end
+    return jobInfo
   end
 
   ---Start a given job, if it's pending

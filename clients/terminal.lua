@@ -286,7 +286,9 @@ local charModes = {
         craftInfo = nil
         changeMode("SEARCH")
       elseif ch == 'n' then
-        lib.cancelCraft(craftInfo.jobId)
+        if craftInfo.success then
+          lib.cancelCraft(craftInfo.jobId)
+        end
         craftInfo = nil
         changeMode("SEARCH")
       end
