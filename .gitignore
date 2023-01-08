@@ -3,3 +3,8 @@
 log.txt
 config.txt
 basalt.lua
+
+# Jekyll junk files
+.jekyll-metadata
+.jekyll-cache/
+_site/

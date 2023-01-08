@@ -1,3 +1,7 @@
+---
+title: '`inventory.lua`'
+parent: Modules
+---
 # `inventory.lua`
 This module is the main backbone of the storage system. It uses `abstractInvLib` to wrap any number of inventories together, to act as the main storage capacity of the system.
 

@@ -1,3 +1,7 @@
+---
+title: '`interface.lua`'
+parent: Modules
+---
 # `interface.lua`
 This module is a generic function interface for general, generic interface formats and protocols. The only current module that uses this is `modem.lua`. This module does not do anything beyond provide the methods, any other desired functionality (i.e. user authentification, privilages, etc) should be handled by another module.
 
