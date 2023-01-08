@@ -3,7 +3,10 @@ local modem = peripheral.find("modem", function(name, modem)
   -- return not modem.isWireless()
   return true
 end)
-rednet.open(peripheral.getName(modem))
+local modemLib = require("modemLib")
+local modemName = peripheral.getName(modem)
+modemLib.connect(modemName)
+rednet.open(modemName)
 local networkName = modem.getNameLocal()
 ---@enum State
 local STATES = {
@@ -253,6 +256,41 @@ local function turtleInventoryEvent()
     end
   end
 end
+
+local slotToRecipeLookup = {
+  [1] = 1,
+  [2] = 2,
+  [3] = 3,
+  [5] = 4,
+  [6] = 5,
+  [7] = 6,
+  [9] = 7,
+  [10] = 8,
+  [11] = 9
+}
+
+local function addRecipe(shaped)
+  refreshTurtleInventory()
+  local recipe = {}
+  if shaped then
+    for turtleSlot, craftSlot in pairs(slotToRecipeLookup) do
+      recipe[craftSlot] = (turtleInventory[turtleSlot] or {}).name
+    end
+  else
+    for _, item in pairs(turtleInventory) do
+      table.insert(recipe, item.name)
+    end
+  end
+  turtle.craft()
+  refreshTurtleInventory()
+  local crafted, amount = "", 0
+  for _, item in pairs(turtleInventory) do
+    crafted = item.name
+    amount = amount + item.count
+  end
+  modemLib.addGridRecipe(crafted, amount, recipe, shaped)
+end
+
 local interfaceLUT
 interfaceLUT = {
   help = function()
@@ -289,6 +327,24 @@ interfaceLUT = {
   end,
   reboot = function ()
     os.reboot()
+  end,
+  recipe = function ()
+    if state ~= "READY" then
+      print("Must be ready to use")
+      return
+    end
+    changeState(STATES.BUSY)
+    print("Too add a crafting recipe, place the recipe in the turtle's inventory.")
+    print("Then enter 1 for shaped, 2 for unshaped, or anything else to cancel")
+    local shapeSelection = read()
+    if shapeSelection == "1" then
+      addRecipe(true)
+    elseif shapeSelection == "2" then
+      addRecipe(false)
+    else
+      print("Cancelled")
+    end
+    changeState(STATES.READY)
   end
 }
 function interface()

@@ -403,6 +403,35 @@ init = function(loaded,config)
     start = function()
       -- loaded.crafting.interface.request_craft("minecraft:piston", 128)
       parallel.waitForAny(modemMessageHandler, keepAlive)
+    end,
+    ---Add a grid recipe manually
+    ---@param name string
+    ---@param produces integer
+    ---@param recipe string[] table of ITEM NAMES, this does NOT support tags. Shaped recipes are assumed 3x3. Nil is assumed empty space.
+    ---@param shaped boolean
+    addGridRecipe = function (name, produces, recipe, shaped)
+      common.enforceType(name,1,"string")
+      common.enforceType(produces,2,"integer")
+      common.enforceType(recipe,3,"string[]")
+      common.enforceType(shaped,4,"boolean")
+      local gridRecipe = {}
+      gridRecipe.shaped = shaped
+      gridRecipe.produces = produces
+      gridRecipe.recipe = {}
+      if shaped then
+        for i = 1, 9 do
+          local itemName = recipe[i]
+          gridRecipe.recipe[i] = (itemName and crafting.getOrCacheString(itemName)) or 0
+        end
+        gridRecipe.width = 3
+        gridRecipe.height = 3
+      else
+        for k,v in ipairs(recipe) do
+          table.insert(gridRecipe.recipe, crafting.getOrCacheString(v))
+        end
+      end
+      gridRecipes[name] = gridRecipe
+      saveGridRecipes()
     end
   }
 end

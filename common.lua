@@ -163,6 +163,38 @@ local function readUInt16T(f)
   return t
 end
 
+local function checkType(value,targetType)
+  assert(type(targetType) == "string", "Type is not a string")
+  if targetType:sub(-2) == "[]" then
+    -- this is an array type
+    if type(value) ~= "table" then
+      return false
+    end
+    for i, val in pairs(value) do
+      if not checkType(val, targetType:sub(1,-3)) then
+        return false
+      end
+    end
+    return true
+  elseif targetType == "integer" then
+    return type(value) == "number" and math.ceil(value) == math.floor(value)
+  end
+  return type(value) == targetType
+end
+
+---Assert that the given argument is of an accepted type
+---@param value any
+---@param argPos integer
+---@param ... string types, supports array-likes with [], and integer types
+local function enforceType(value,argPos,...)
+  for _,targetType in ipairs({...}) do
+    if checkType(value, targetType) then
+      return
+    end
+  end
+  error(("Argument #%u invalid, expected %s, got %s"):format(argPos, textutils.serialise({...},{compact=true}),type(value)), 2)
+end
+
 return {
   saveTableToFile = saveTableToFile,
   loadTableFromFile = loadTableFromFile,
@@ -177,4 +209,5 @@ return {
   writeUInt16 = writeUInt16,
   writeUInt16T = writeUInt16T,
   writeUInt8 = writeUInt8,
+  enforceType = enforceType
 }

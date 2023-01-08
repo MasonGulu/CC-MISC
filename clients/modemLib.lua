@@ -131,4 +131,8 @@ function lib.cancelCraft(jobID)
   return interface("cancelCraft",jobID)
 end
 
+function lib.addGridRecipe(name,produces,recipe,shaped)
+  return interface("addGridRecipe", name, produces, recipe, shaped)
+end
+
 return lib

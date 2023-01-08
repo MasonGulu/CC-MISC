@@ -77,6 +77,15 @@ init=function (loaded,config)
     return loaded.crafting.interface.cancelCraft(jobID)
   end
 
+  ---Add a grid recipe manually
+  ---@param name string
+  ---@param produces integer
+  ---@param recipe string[] table of ITEM NAMES, this does NOT support tags
+  ---@param shaped boolean
+  function genericInterface.addGridRecipe(name,produces,recipe,shaped)
+    return loaded.grid.interface.addGridRecipe(name,produces,recipe,shaped)
+  end
+
   local interface = {}
   local inventoryUpdateHandlers = {}
   ---Add a handler for the inventoryUpdate event
