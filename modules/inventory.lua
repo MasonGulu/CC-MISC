@@ -24,8 +24,13 @@ config = {
   },
   defragOnStart = {
     type = "boolean",
-    description = "'Defragment' the chests on storage system start",
+    description = "Defragment the storage on storage system start",
     default = true
+  },
+  defragEachTransfer = {
+    type = "boolean",
+    description = "Defragment the storage each time the queue is flushed.",
+    default = false
   }
 },
 setup = function(moduleConfig)
@@ -142,7 +147,9 @@ init = function(loaded, config)
       end
       transferQueueDiffers = true
       parallel.waitForAll(table.unpack(transferExecution))
-      defrag()
+      if config.inventory.defragEachTransfer.value then
+        defrag()
+      end
       os.queueEvent("inventoryUpdate", storage.list())
       if #transferQueue > 0 then
         performTransfer()

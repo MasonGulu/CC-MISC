@@ -1,4 +1,12 @@
 # MISC - Modular Inventory Storage and Crafting
+PRs are welcome to this project, I hope the documentation is clear enough, but if you have any questions feel free to ask.
+
+The directory structure of this project is as follows
+* `clients/` client programs and libraries
+* `modules/` all ready to use modules
+* `recipes/` all vanilla grid recipes stored in custom binary format
+* `suspended/` modules which development has been suspended on
+* `common.lua`
 
 # Setup
 A minimal MISC system consists of
@@ -20,6 +28,7 @@ To install the MISC server, you will need the following files.
 * The modules you'd like in `/modules/`, (`/modules/inventory.lua` and `abstractInvLib.lua` are required)
   * TODO add detail about changing module load order
 * The shared library, `common.lua`
+* [`abstractInvLib.lua`](https://gist.github.com/MasonGulu/57ef0f52a93304a17a9eaea21f431de6) For ease of development there is currently a copy in this repository.
 
 ## MISC Terminal Client
 To install the MISC terminal, attach a turtle to your MISC network and install the following files. These can both be installed to the root of the drive.

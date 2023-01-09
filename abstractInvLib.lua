@@ -210,6 +210,7 @@ function abstractInventory(inventories, assumeLimits)
     itemNameNBTLUT = {}
     emptySlotLUT = {}
     inventorySlotLUT = {}
+    slotNumberLUT = {}
     local deepCacheFunctions = {}
     for _, inventory in pairs(inventories) do
       emptySlotLUT[inventory] = {}
@@ -872,7 +873,7 @@ function abstractInventory(inventories, assumeLimits)
   ---@return {free: integer, used:integer, total:integer}
   function api.getUsage()
     local ret = {}
-    ret.total = #slotNumberLUT
+    ret.total = api.size()
     ret.used = 0
     for i,_ in pairs(api.list()) do
       ret.used = ret.used + 1

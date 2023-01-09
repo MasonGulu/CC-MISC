@@ -6,7 +6,8 @@ local name
 local hostPort = 50
 local updatePort = 51
 local respPort = 50
-local timeout = 3000
+local timeout = 2000
+local maxRetries = 10
 
 local function validateMessage(message)
   local valid = type(message) == "table" and message.protocol ~= nil
@@ -57,16 +58,24 @@ local function interface(method, ...)
   }
   modem.transmit(hostPort, respPort, message)
   local waitStart = os.epoch("utc")
+  local failures = 0
   while true do
     local event = getModemMessage(validateMessage, 2)
     if event then
-      message = event.message
-      if message.protocol == "storage_system_modem" and message.method == method then
-        return table.unpack(message.response)
+      local recMessage = event.message
+      if recMessage.protocol == "storage_system_modem" and recMessage.method == method then
+        return table.unpack(recMessage.response)
       end
     end
     if waitStart + timeout < os.epoch("utc") then
-      error("Response timed out.", 2)
+      if failures < maxRetries then
+        print("Response timed out, retrying.")
+        modem.transmit(hostPort, respPort, message)
+        failures = failures + 1
+        waitStart = os.epoch("utc")
+      else
+        error(("Got no response after %u failures."):format(failures), 2)
+      end
     end
   end
 end
