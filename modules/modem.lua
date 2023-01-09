@@ -1,3 +1,5 @@
+---@class modules.modem
+---@field interface modules.modem.interface
 return {
 id = "modem",
 version = "1.0.0",
@@ -94,6 +96,7 @@ init = function(loaded, config)
       end
     end
   end
+  ---@class modules.modem.interface
   return interface
 end
 }

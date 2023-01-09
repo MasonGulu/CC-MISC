@@ -1,3 +1,5 @@
+---@class modules.logger
+---@field interface modules.logger.interface
 return {
 id = "logger",
 version = "1.0.0",
@@ -86,6 +88,7 @@ init = function (loaded, config)
       thread = thread,
     }, {__index=loggerMetta})
   end
+  ---@class modules.logger.interface
   return {
     logger = logger
   }

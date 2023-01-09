@@ -1,4 +1,6 @@
 local common = require("common")
+---@class modules.inventory
+---@field interface modules.inventory.interface
 return {
 id = "inventory",
 version = "1.0.0",
@@ -251,6 +253,7 @@ init = function(loaded, config)
       (os.epoch("utc")-t0)/1000)
   end
 
+  ---@class modules.inventory.interface : AbstractInventory
   local module = {}
   for k,v in pairs(storage) do
     if k:sub(1,1) ~= "_" then

@@ -1,5 +1,6 @@
 --- Grid crafting recipe handler
 local common = require("common")
+---@class modules.grid
 return {
 id = "grid",
 version = "1.0.2",
@@ -456,6 +457,7 @@ init = function(loaded,config)
     -- end
   end
   crafting.addCraftingHandler("grid", craftingHandler)
+  ---@class modules.grid.interface
   return {
     start = function()
       -- loaded.crafting.interface.request_craft("minecraft:piston", 128)

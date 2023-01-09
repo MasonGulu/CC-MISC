@@ -1,4 +1,6 @@
 local common = require("common")
+---@class modules.crafting
+---@field interface modules.crafting.interface
 return {
 id = "crafting",
 version = "1.0.2",
@@ -212,6 +214,8 @@ init = function(loaded, config)
     craftableLists[id] = list
   end
 
+  ---List all the items that are craftable
+  ---@return string[]
   local function listCraftables()
     local l = {}
     for k, v in pairs(craftableLists) do
@@ -881,6 +885,7 @@ init = function(loaded, config)
     end
   end
 
+  ---@class modules.crafting.interface
   return {
     start = function()
       parallel.waitForAny(tickCrafting, inventoryTransferListener, jsonFileImport)
