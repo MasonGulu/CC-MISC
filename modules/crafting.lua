@@ -23,28 +23,6 @@ init = function(loaded, config)
   ---@type table<string,ItemIndex> lookup from name -> item_lookup index
   local itemNameLookup = {}
 
-
-  ---Get the index of a string or tag, creating one if one doesn't exist already
-  ---@param str string
-  ---@param tag boolean|nil
-  ---@return ItemIndex
-  local function getOrCacheString(str, tag)
-    if not str then
-      error("",2)
-    end
-    if itemNameLookup[str] then
-      return itemNameLookup[str]
-    end
-    local i = #itemLookup + 1
-    if tag then
-      itemLookup[i] = {str,tag=true}
-    else
-      itemLookup[i] = {str}
-    end
-    itemNameLookup[str] = i
-    return i
-  end
-
   local function saveItemLookup()
     local f = assert(fs.open("recipes/item_lookup.bin", "wb"))
     f.write("ILUT")
@@ -81,6 +59,30 @@ init = function(loaded, config)
     for k,v in pairs(itemLookup) do
       itemNameLookup[v[1]] = k
     end
+  end
+
+  ---Get the index of a string or tag, creating one if one doesn't exist already
+  ---@param str string
+  ---@param tag boolean|nil
+  ---@return ItemIndex
+  local function getOrCacheString(str, tag)
+    common.enforceType(str,1,"string")
+    common.enforceType(tag,2,"boolean","nil")
+    if not str then
+      error("",2)
+    end
+    if itemNameLookup[str] then
+      return itemNameLookup[str]
+    end
+    local i = #itemLookup + 1
+    if tag then
+      itemLookup[i] = {str,tag=true}
+    else
+      itemLookup[i] = {str}
+    end
+    itemNameLookup[str] = i
+    saveItemLookup() -- updated item lookup
+    return i
   end
 
   local jsonLogger = setmetatable({}, {__index=function () return function () end end})
