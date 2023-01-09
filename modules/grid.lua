@@ -2,7 +2,7 @@
 local common = require("common")
 return {
 id = "grid",
-version = "1.0.1",
+version = "1.0.2",
 config = {
   modem = {
     type = "string",
@@ -348,14 +348,18 @@ init = function(loaded,config)
     node.height = recipe.height
     node.children = {}
     node.name = name
+    local requiredItemCounts = {}
     for k,v in pairs(plan) do
       v.count = toCraft
       if v.tag then
         -- this is a tag we could not resolve, so make a placeholder node
         table.insert(node.children, crafting.createMissingNode(v.tag, v.count, node.jobId))
       else
-        crafting.mergeInto(crafting.craft(v.name, v.count, node.jobId, nil, requestChain), node.children)
+        requiredItemCounts[v.name] = (requiredItemCounts[v.name] or 0) + v.count
       end
+    end
+    for k,v in pairs(requiredItemCounts) do
+      crafting.mergeInto(crafting.craft(k, v, node.jobId, nil, requestChain), node.children)
     end
     for k,v in pairs(node.children) do
       v.parent = node
