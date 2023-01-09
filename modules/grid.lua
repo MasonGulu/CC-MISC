@@ -2,7 +2,7 @@
 local common = require("common")
 return {
 id = "grid",
-version = "1.0.0",
+version = "1.0.1",
 config = {
   modem = {
     type = "string",
@@ -136,6 +136,19 @@ init = function(loaded,config)
     updateCraftableList()
   end
 
+  ---Remove a grid recipe
+  ---@param name string
+  ---@return boolean success
+  local function removeGridRecipe(name)
+    common.enforceType(name,1,"string")
+    if gridRecipes[name] then
+      gridRecipes[name] = nil
+      return true
+    end
+    saveGridRecipes()
+    return false
+  end
+
   ---Load the grid recipes from a file
   local function loadGridRecipes()
     local f = assert(fs.open("recipes/grid_recipes.bin", "rb"))
@@ -224,6 +237,9 @@ init = function(loaded,config)
     end,
     NEW_RECIPE = function (message)
       addGridRecipe(message.name,message.amount,message.recipe,message.shaped)
+    end,
+    REMOVE_RECIPE = function (message)
+      removeGridRecipe(message.name)
     end
   }
 
@@ -328,6 +344,8 @@ init = function(loaded,config)
     end
     node.plan = plan
     node.toCraft = toCraft
+    node.width = recipe.width
+    node.height = recipe.height
     node.children = {}
     node.name = name
     for k,v in pairs(plan) do
@@ -364,7 +382,7 @@ init = function(loaded,config)
         local transfers = {}
         for slot,v in pairs(node.plan) do
           local x = (slot-1) % (node.width or 3) + 1
-          local y = math.floor((slot-1) / (node.height or 3))
+          local y = math.floor((slot-1) / (node.width or 3))
           local turtleSlot = y * 4 + x
           table.insert(transfers, function() crafting.pushItems(availableTurtle.name, v.name, v.count, turtleSlot) end)
         end
@@ -439,7 +457,8 @@ init = function(loaded,config)
       -- loaded.crafting.interface.request_craft("minecraft:piston", 128)
       parallel.waitForAny(modemMessageHandler, keepAlive)
     end,
-    addGridRecipe = addGridRecipe
+    addGridRecipe = addGridRecipe,
+    removeGridRecipe = removeGridRecipe,
   }
 end
 }

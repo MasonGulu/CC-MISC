@@ -1,6 +1,6 @@
 return {
 id="interface",
-version="1.0.0",
+version="1.0.1",
 init=function (loaded,config)
   local genericInterface = {}
   ---Push items to an inventory
@@ -84,6 +84,10 @@ init=function (loaded,config)
   ---@param shaped boolean
   function genericInterface.addGridRecipe(name,produces,recipe,shaped)
     return loaded.grid.interface.addGridRecipe(name,produces,recipe,shaped)
+  end
+
+  function genericInterface.removeGridRecipe(name)
+    return loaded.grid.interface.removeGridRecipe(name)
   end
 
   ---Get the slot usage of this inventory
