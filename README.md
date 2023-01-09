@@ -37,7 +37,7 @@ To install the MISC server, you will need the following files.
 ## MISC Terminal Client
 To install the MISC terminal, attach a turtle to your MISC network and install the following files. These can both be installed to the root of the drive.
 * The terminal executable `clients/terminal.lua`
-* The generic modem interface library `clients/modem_lib.lua`
+* The generic modem interface library `clients/modemLib.lua`
 
 You'll also require a few additional modules on the MISC server
 * Generic interface handler `/modules/interface.lua`
