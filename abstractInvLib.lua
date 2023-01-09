@@ -924,6 +924,41 @@ function abstractInventory(inventories, assumeLimits)
     return moved
   end
 
+  local function getItemIndex(t, item)
+    for k,v in ipairs(t) do
+      if v == item then
+        return k
+      end
+    end
+  end
+
+  ---Add an inventory to the storage object
+  ---@param inventory string
+  ---@return boolean success
+  function api.addInventory(inventory)
+    expect(1,inventory,"table")
+    if getItemIndex(inventories, inventory) then
+      return false
+    end
+    table.insert(inventories, inventory)
+    api.refreshStorage(true)
+    return true
+  end
+
+  ---Remove an inventory from the storage object
+  ---@param inventory string
+  ---@return boolean success
+  function api.removeInventory(inventory)
+    expect(1,inventory,"string")
+    local index = getItemIndex(inventories, inventory)
+    if not index then
+      return false
+    end
+    table.remove(inventories, index)
+    api.refreshStorage(true)
+    return true
+  end
+
   ---Get the number of free slots in this inventory
   ---@return integer
   function api.freeSpace()
