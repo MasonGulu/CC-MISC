@@ -1,7 +1,7 @@
 local common = require("common")
 return {
 id = "crafting",
-version = "1.0.1",
+version = "1.0.2",
 config = {
   tagLookup = {
     type="table",
@@ -94,16 +94,17 @@ init = function(loaded, config)
   ---@param jsonType string
   ---@param handler fun(json: table)
   local function addJsonTypeHandler(jsonType, handler)
+    common.enforceType(jsonType,1,"string")
+    common.enforceType(handler,2,"function")
     jsonTypeHandlers[jsonType] = handler
   end
   local function loadJson(json)
+    common.enforceType(json, 1, "table")
     if jsonTypeHandlers[json.type] then
-      print("Handling", json.type)
       jsonLogger:info("Importing JSON of type %s", json.type)
       jsonTypeHandlers[json.type](json)
     else
       jsonLogger:info("Skipping JSON of type %s, no handler available", json.type)
-      print("Skipping", json.type)
     end
   end
 
@@ -150,6 +151,7 @@ init = function(loaded, config)
   ---@param name string
   ---@return integer
   local function getCount(name)
+    common.enforceType(name,1,"string")
     return loaded.inventory.interface.getCount(name) - (reservedItems[name] or 0)
   end
 
@@ -158,6 +160,8 @@ init = function(loaded, config)
   ---@param amount integer
   ---@return integer
   local function allocateItems(name, amount)
+    common.enforceType(name,1,"string")
+    common.enforceType(amount,2,"integer")
     reservedItems[name] = (reservedItems[name] or 0) + amount
     return amount
   end
@@ -167,6 +171,8 @@ init = function(loaded, config)
   ---@param amount integer
   ---@return integer
   local function deallocateItems(name, amount)
+    common.enforceType(name,1,"string")
+    common.enforceType(amount,2,"integer")
     reservedItems[name] = reservedItems[name] - amount
     assert(reservedItems[name] >= 0, "We have negative items reserved?")
     if reservedItems[name] == 0 then
@@ -180,6 +186,7 @@ init = function(loaded, config)
   ---Get the maximum stacksize of an item by name
   ---@param name string
   local function getStackSize(name)
+    common.enforceType(name,1,"string")
     if cachedStackSizes[name] then
       return cachedStackSizes[name]
     end
@@ -200,6 +207,8 @@ init = function(loaded, config)
   ---@param id string ID of crafting module/type
   ---@param list string[] table of craftable item names, assigned by reference
   local function addCraftableList(id, list)
+    common.enforceType(id,1,"string")
+    common.enforceType(list,2,"string[]")
     craftableLists[id] = list
   end
 
@@ -231,6 +240,7 @@ init = function(loaded, config)
   ---@return boolean success
   ---@return string itemName
   local function selectBestFromTag(tag)
+    common.enforceType(tag,1,"string")
     if config.crafting.tagLookup.value[tag] then
       return true, config.crafting.tagLookup.value[tag]
     end
@@ -277,6 +287,7 @@ init = function(loaded, config)
   ---@return boolean success
   ---@return string itemName
   local function selectBestFromIndex(index)
+    common.enforceType(index,1,"integer")
     local itemInfo = assert(itemLookup[index], "Invalid item index")
     if itemInfo.tag then
       return selectBestFromTag(itemInfo[1])
@@ -289,6 +300,7 @@ init = function(loaded, config)
   ---@return boolean success
   ---@return string itemName
   local function selectBestFromList(list)
+    common.enforceType(list,1,"integer[]")
     return true, itemLookup[list[1]][1]
   end
 
@@ -297,6 +309,7 @@ init = function(loaded, config)
   ---@return boolean success
   ---@return string name itemname if success, otherwise tag
   local function getBestItem(item)
+    common.enforceType(item, 1, "integer[]", "integer")
     if type(item) == "table" then
       return selectBestFromList(item)
     elseif type(item) == "number" then
@@ -309,6 +322,8 @@ init = function(loaded, config)
   ---@param from table
   ---@param to table
   local function mergeInto(from, to)
+    common.enforceType(from, 1, "table")
+    common.enforceType(to, 1, "table")
     for k,v in pairs(from) do
       table.insert(to,v)
     end
@@ -326,6 +341,7 @@ init = function(loaded, config)
   ---@param t table
   ---@return table
   local function shallowClone(t)
+    common.enforceType(t,1,"table")
     local nt = {}
     for k,v in pairs(t) do
       nt[k] = v
@@ -341,10 +357,15 @@ init = function(loaded, config)
   ---@type table<string,fun(node:CraftingNode,name:string,count:integer,request_chain:table):boolean>
   local requestCraftTypes = {}
   local function addCraftType(type, func)
+    common.enforceType(type,1,"string")
+    common.enforceType(func,1,"function")
     requestCraftTypes[type] = func
   end
 
   local function createMissingNode(name, count, jobId)
+    common.enforceType(name, 1, "string")
+    common.enforceType(count, 2, "integer")
+    common.enforceType(jobId, 3, "string")
     return {
       name = name,
       jobId = jobId,
@@ -361,6 +382,11 @@ init = function(loaded, config)
   ---@param requestChain table<string,boolean>|nil table of item names that have been requested
   ---@return CraftingNode[] leaves ITEM|CG node
   function craft(name, count, jobId, force, requestChain)
+    common.enforceType(name,1,"string")
+    common.enforceType(count,2,"integer")
+    common.enforceType(jobId,3,"string")
+    common.enforceType(force, 4, "boolean", "nil")
+    common.enforceType(requestChain,5,"table", "nil")
     requestChain = shallowClone(requestChain or {})
     if requestChain[name] then
       return {createMissingNode(name,count,jobId)}
@@ -411,6 +437,8 @@ init = function(loaded, config)
   ---@param root CraftingNode root
   ---@param func fun(node: CraftingNode)
   local function runOnAll(root, func)
+    common.enforceType(root, 1, "table")
+    common.enforceType(func, 2, "function")
     func(root)
     if root.children then
       for _,v in pairs(root.children) do
@@ -424,6 +452,7 @@ init = function(loaded, config)
   ---@param arr T[]
   ---@param val T
   local function removeFromArray(arr, val)
+    common.enforceType(arr,1,type(val).."[]")
     for i,v in ipairs(arr) do
       if v == val then
         table.remove(arr, i)
@@ -434,6 +463,7 @@ init = function(loaded, config)
   ---Delete a given task, asserting the task is DONE and has no children
   ---@param task CraftingNode
   function deleteTask(task)
+    common.enforceType(task,1,"table")
     if task.type == "ITEM" then
       deallocateItems(task.name, task.count)
     end
@@ -488,6 +518,10 @@ init = function(loaded, config)
   ---@param toMove integer
   ---@param slot integer
   local function pushItems(to, name, toMove, slot)
+    common.enforceType(to,1,"string")
+    common.enforceType(name,2,"string")
+    common.enforceType(toMove,3,"integer")
+    common.enforceType(slot,4,"integer")
     local failCount = 0
     while toMove > 0 do
       local transfered = loaded.inventory.interface.pushItems(false, to, name, toMove, slot, nil, {optimal=false})
@@ -504,23 +538,28 @@ init = function(loaded, config)
   ---@type table<string,fun(node: CraftingNode)> Process an item in the READY state
   local readyHandlers = {} -- TODO get this from grid.lua
 
-  ---@param type string
+  ---@param nodeType string
   ---@param func fun(node: CraftingNode)>
-  local function addReadyHandler(type, func)
-    readyHandlers[type] = func
+  local function addReadyHandler(nodeType, func)
+    common.enforceType(nodeType,1,"string")
+    common.enforceType(func,2,"function")
+    readyHandlers[nodeType] = func
   end
 
   ---@type table<string,fun(node: CraftingNode)> Process an item that is in the CRAFTING state
   local craftingHandlers = {} -- TODO get this from grid.lua
 
-  ---@param type string
+  ---@param nodeType string
   ---@param func fun(node: CraftingNode)>
-  local function addCraftingHandler(type, func)
-    craftingHandlers[type] = func
+  local function addCraftingHandler(nodeType, func)
+    common.enforceType(nodeType,1,"string")
+    common.enforceType(func,2,"function")
+    craftingHandlers[nodeType] = func
   end
 
   ---Deletes all the node's children, calling delete_task on each
   local function deleteNodeChildren(node)
+    common.enforceType(node,1,"table")
     if not node.children then
       return
     end
@@ -534,6 +573,7 @@ init = function(loaded, config)
   ---Update the state of the given node
   ---@param node CraftingNode
   function tickNode(node)
+    common.enforceType(node,1,"table")
     if not node.state then
       if node.type == "ROOT" then
         node.startTime = os.epoch("utc")
@@ -561,7 +601,6 @@ init = function(loaded, config)
         end
         if allChildrenDone then
           -- this is ready to be crafted
-          print("ready to be crafted", node.type, node.taskId)
           deleteNodeChildren(node)
           removeFromArray(waitingQueue, node)
           if node.type == "ROOT" then
@@ -603,7 +642,7 @@ init = function(loaded, config)
         end
       end
     end
-    require "common".saveTableToFile("flatTaskLookup.txt", flatTaskLookup)
+    require "common".saveTableToFile("flatTaskLookup.txt", flatTaskLookup, false)
   end
 
   local function loadTaskLookup()
@@ -636,6 +675,7 @@ init = function(loaded, config)
   ---Update every node on the tree
   ---@param tree CraftingNode
   local function updateWholeTree(tree)
+    common.enforceType(tree,1,"table")
     -- traverse to each node of the tree
     runOnAll(tree, tickNode)
   end
@@ -643,6 +683,7 @@ init = function(loaded, config)
   ---Remove the parent of each child
   ---@param node CraftingNode
   local function removeChildrensParents(node)
+    common.enforceType(node,1,"table")
     for k,v in pairs(node.children) do
       v.parent = nil
     end
@@ -651,6 +692,7 @@ init = function(loaded, config)
   ---Safely cancel a task by ID
   ---@param taskId string
   local function cancelTask(taskId)
+    common.enforceType(taskId,1,"string")
     craftLogger:debug("Cancelling task %s", taskId)
     local task = taskLookup[taskId]
     if task.state then
@@ -673,6 +715,7 @@ init = function(loaded, config)
   ---Cancel a job by given id
   ---@param jobId any
   local function cancelCraft(jobId)
+    common.enforceType(jobId,1,"string")
     craftLogger:info("Cancelling job %s", jobId)
     if pendingJobs[jobId] then
       pendingJobs[jobId] = nil
@@ -692,7 +735,6 @@ init = function(loaded, config)
       for k,v in pairs(taskLookup) do
         tickNode(v)
       end
-      saveTaskLookup()
 
       os.sleep(1)
     end
@@ -727,6 +769,8 @@ init = function(loaded, config)
   ---@param count integer
   ---@return JobId pendingJobId
   local function createCraftJob(name, count)
+    common.enforceType(name,1,"string")
+    common.enforceType(count,2,"integer")
     local jobId = id()
 
     craftLogger:debug("New job. name:%s,count:%u,jobId:%s", name, count, jobId)
@@ -761,6 +805,7 @@ init = function(loaded, config)
   ---@param root CraftingNode
   ---@return jobInfo
   local function getJobInfo(root)
+    common.enforceType(root, 1, "table")
     local ret = {}
     ret.success = true
     ret.toCraft = {}
@@ -785,6 +830,8 @@ init = function(loaded, config)
   ---@param count integer
   ---@return jobInfo
   local function requestCraft(name,count)
+    common.enforceType(name,1,"string")
+    common.enforceType(count,2,"integer")
     local jobId = createCraftJob(name,count)
     craftLogger:debug("Request craft called for %u %s(s), returning job ID %s", count, name, jobId)
     local jobInfo = getJobInfo(pendingJobs[jobId])
@@ -798,6 +845,7 @@ init = function(loaded, config)
   ---@param jobId JobId
   ---@return boolean success
   local function startCraft(jobId)
+    common.enforceType(jobId,1,"string")
     craftLogger:debug("Start craft called for job ID %s", jobId)
     local job = pendingJobs[jobId]
     if not job then
@@ -814,6 +862,7 @@ init = function(loaded, config)
       table.insert(jobLookup[jobId], node)
     end)
     updateWholeTree(job)
+    saveTaskLookup()
     return true
   end
 

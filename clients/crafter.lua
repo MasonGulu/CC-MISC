@@ -136,10 +136,14 @@ local function colWrite(fg, text)
   term.setTextColor(oldFg)
 end
 
+local lastState
 ---@param newState State
 local function changeState(newState)
   if state ~= newState then
     lastStateChange = os.epoch("utc")
+    if newState == "ERROR" then
+      lastState = state
+    end
   end
   state = newState
   local itemSlots = {}
@@ -168,19 +172,12 @@ end
 
 local function empty()
   local itemSlots = getItemSlots()
-  repeat
-    modem.transmit(port, port, {
-      protocol = "EMPTY",
-      destination = "HOST",
-      source = networkName,
-      itemSlots = itemSlots
-    })
-    itemSlots = getItemSlots()
-    os.sleep(3)
-    -- this delay needs to be high enough
-    -- to allow the inventory system to
-    -- actually perform the transfers
-  until #itemSlots == 0
+  modem.transmit(port, port, {
+    protocol = "EMPTY",
+    destination = "HOST",
+    source = networkName,
+    itemSlots = itemSlots
+  })
 end
 
 local function signalDone()
@@ -198,7 +195,7 @@ local function tryToCraft()
   local readyToCraft = true
   for slot,v in pairs(task.plan) do
     local x = (slot-1) % (task.width or 3) + 1
-    local y = math.floor((slot-1) / (task.height or 3))
+    local y = math.floor((slot-1) / (task.width or 3))
     local turtleSlot = y * 4 + x
     readyToCraft = readyToCraft and turtleInventory[turtleSlot]
     if not readyToCraft then
@@ -297,6 +294,15 @@ local function addRecipe(shaped)
   })
 end
 
+local function removeRecipe(name)
+  modem.transmit(port, port, {
+    protocol = "REMOVE_RECIPE",
+    destination = "HOST",
+    source = networkName,
+    name = name
+  })
+end
+
 local interfaceLUT
 interfaceLUT = {
   help = function()
@@ -324,9 +330,16 @@ interfaceLUT = {
     print(("Local network name: %s"):format(networkName))
   end,
   cinfo = function()
-    if state == STATES.CRAFTING then
-      print("Current recipe is:")
-      print(textutils.serialise(task.plan))
+    if state == STATES.CRAFTING or lastState == STATES.CRAFTING then
+      print(("Crafting %u %s (%u crafts)"):format(task.count, task.name, task.toCraft))
+      local x, y = term.getCursorPos()
+      for k,v in pairs(task.plan) do
+        local dx = (k-1) % (task.width or 3) + 1
+        local dy = math.floor((k-1) / (task.width or 3))
+        term.setCursorPos(x+dx,y+dy)
+        term.write("*")
+      end
+      term.setCursorPos(1,y+4)
     else
       print("Not crafting.")
     end
@@ -351,7 +364,18 @@ interfaceLUT = {
       print("Cancelled")
     end
     changeState(STATES.READY)
-  end
+  end,
+  rmRecipe = function ()
+    print("Enter a recipe name to delete, leave blank to cancel")
+    local name = read()
+    if name ~= "" then
+      removeRecipe(name)
+      print("Removed",name)
+    else
+      print("Cancelled.")
+    end
+  end,
+  empty = empty
 }
 function interface()
   print("Crafting turtle indev")

@@ -75,7 +75,11 @@ local loadedConfig = common.loadTableFromFile("config.txt") or {}
 local badOptions = {}
 for id, spec in pairs(config) do
   for name, info in pairs(spec) do
-    config[id][name].value = protectedIndex(loadedConfig, id, name, "value") or config[id][name].default
+    local loadedValue = protectedIndex(loadedConfig, id, name, "value")
+    if loadedValue == nil then
+      loadedValue = config[id][name].default
+    end
+    config[id][name].value = loadedValue
     config[id][name].id = id
     config[id][name].name = name
     if type(config[id][name].value) ~= info.type then
@@ -192,7 +196,10 @@ while true do
     if not moduleFilters[co] or moduleFilters[co] == "" or moduleFilters[co] == e[1] then
       local ok, filter = coroutine.resume(co, table.unpack(e))
       if not ok then
-        print("Module errored, saving crash report..")
+        term.setTextColor(colors.red)
+        print("Module errored:")
+        print(filter)
+        print("Saving crash report to 'crash.txt'...")
         saveCrashReport(moduleIds[i], debug.traceback(co), filter)
         return
       end

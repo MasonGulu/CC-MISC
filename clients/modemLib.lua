@@ -148,4 +148,8 @@ function lib.getUsage()
   return interface("getUsage")
 end
 
+function lib.removeGridRecipe(name)
+  return interface("removeGridRecipe", name)
+end
+
 return lib
