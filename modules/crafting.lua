@@ -1,7 +1,7 @@
 local common = require("common")
 return {
 id = "crafting",
-version = "1.0.0",
+version = "1.0.1",
 config = {
   tagLookup = {
     type="table",
