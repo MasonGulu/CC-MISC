@@ -1,6 +1,6 @@
 return {
 id="interface",
-version="INDEV",
+version="1.0.0",
 init=function (loaded,config)
   local genericInterface = {}
   ---Push items to an inventory

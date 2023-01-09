@@ -1,6 +1,6 @@
 return {
 id = "logger",
-version = "INDEV",
+version = "1.0.0",
 config = {
   file = {
     type = "string",

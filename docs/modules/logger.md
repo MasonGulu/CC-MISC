@@ -1,8 +1,8 @@
 ---
-title: '`logger.md`'
+title: '`logger.lua`'
 parent: Modules
 ---
-# `logger.md`
+# `logger.lua`
 This module provides a simple interface to log information. It supports 4 levels of logs (DEBUG, INFO, WARN, ERROR), and the minimum log level can be specified.
 
 ## Interface Information
@@ -15,11 +15,11 @@ end
 ```
 This will make your requirement of `logger` optional. Then you may simply log information like so
 ```lua
-log:debug("Some debug info!")
-log:info("Some information!")
-log:warn("A warning!")
-log:error("An error, %s", "by the way these all format strings")
+logger:debug("Some debug info!")
+logger:info("Some information!")
+logger:warn("A warning!")
+logger:error("An error, %s", "by the way these all format strings")
 ```
 
 ## Internal Information
-Metatables.
+Metatables. There's not much going on here other than creating logging objects using meta

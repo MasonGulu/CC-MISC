@@ -1,12 +1,16 @@
 # MISC - Modular Inventory Storage and Crafting
 PRs are welcome to this project, I hope the documentation is clear enough, but if you have any questions feel free to ask.
 
+This documentation is also available at misc.madefor.cc
+
 The directory structure of this project is as follows
 * `clients/` client programs and libraries
 * `modules/` all ready to use modules
 * `recipes/` all vanilla grid recipes stored in custom binary format
 * `suspended/` modules which development has been suspended on
-* `common.lua`
+* `common.lua` common library file (that should be split up in the future)
+* `abstractInvLib.lua` local copy of [`abstractInvLib.lua`](https://gist.github.com/MasonGulu/57ef0f52a93304a17a9eaea21f431de6) to ease development, will eventually be removed
+* `storage.lua` entrypoint and module loader
 
 # Setup
 A minimal MISC system consists of
@@ -25,8 +29,8 @@ Then adding as many crafty turtles running `/clients/crafter.lua` as you'd like.
 ## MISC Server
 To install the MISC server, you will need the following files.
 * The main executable, `storage.lua`
-* The modules you'd like in `/modules/`, (`/modules/inventory.lua` and `abstractInvLib.lua` are required)
-  * TODO add detail about changing module load order
+* The modules you'd like in `/modules/`, (`/modules/inventory.lua` is required)
+  * Currently module load order and setup is defined at the top of `storage.lua`. Simply add the modules you'd like to load to the `modules` table.
 * The shared library, `common.lua`
 * [`abstractInvLib.lua`](https://gist.github.com/MasonGulu/57ef0f52a93304a17a9eaea21f431de6) For ease of development there is currently a copy in this repository.
 
@@ -39,62 +43,5 @@ You'll also require a few additional modules on the MISC server
 * Generic interface handler `/modules/interface.lua`
 * Modem interface protocol `/modules/modem.lua`
 
-# Development information
-The entrypoint, `storage.lua` is nothing more than a module and config loader.
-An example of a module this would load is as follows.
-```lua
-return {
-id = "example",
-version = "0.0.1",
-config = {
-  name = {
-    type = "string", -- any serializable lua type is allowed here
-    description = "A string configuration option.",
-    default = "default",
-    -- when this is loaded and passed into init the value of this option will be at ["value"]
-  }
-},
--- This function is optional. If present, this function will be called whenever a nil config option is encountered in this module's settings.
--- The moduleConfig passed in is the config settings for this specific module.
--- It is asserted that all settings are set to valid values when this function returns.
-setup = function(moduleConfig) end,
-
--- This function is not required, but a warning will be printed if it is not present.
--- loaded is the module environment (more below)
--- config is the config environment (more below)
-init = function(loaded, config)
-  local interface = {}
-
-  -- This function is optional, if present this will be executed in parallel with all other modules.
-  function interface.start = function() end
-
-  return interface
-end
-}
-```
-
-## Module environment
-Modules are loaded using `require`, the table they return are placed into `modules[id]`.
-Everything initially returned by the module should be stateless, all state is achieved by providing the `init` function.
-To enable inter-module communication the value returned by the `init` function is placed into `modules[id].interface`.
-
-There is one module that is artificially provided by `storage.lua`, there are various config functions located at `modules.config.interface`.
-
-## Config environment
-Whenever a module has `config` defined as a table, that table is placed into the config environment at `config[id]`. 
-Then after all modules are loaded the config file is loaded, and all config options are verified before the initialization stage begins.
-Each config options's value is then stored at `value`.
-
-## Module load stages
-There are multiple stages in module loading. Loading, config loading, initializing, and executing.
-
-The first thing done is to load each module, all that happens here is each module is `require`'d and stuck into the `modules` table
-
-The second thing done is to load and validate the config.
-
-Then each module's `init` function is called, and anything returned is placed into the `interface` key.
-
-Then to conclude each module that provided a `start` function in the `interface` is called in parallel.
-
 # Module Specific Documentation
-Look in `/docs/` for module specific documentation.
+Look in `/docs/` for development and module specific documentation.

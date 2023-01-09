@@ -1,7 +1,6 @@
-local PROTOCOL = "STORAGE"
 return {
 id = "modem",
-version = "INDEV",
+version = "1.0.0",
 config = {
   modem = {
     type = "string",

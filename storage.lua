@@ -3,7 +3,6 @@ local printf = common.printf
 
 ---@type table array of module filenames to load
 local modules = {
-  --"modules.debug",
   "modules.logger",
   "modules.inventory",
   "modules.crafting",

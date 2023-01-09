@@ -1,7 +1,7 @@
 local common = require("common")
 return {
 id = "inventory",
-version = "INDEV",
+version = "1.0.0",
 config = {
   inventories = {
     type = "table",

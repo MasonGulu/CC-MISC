@@ -2,7 +2,7 @@
 local common = require("common")
 return {
 id = "grid",
-version = "INDEV",
+version = "1.0.0",
 config = {
   modem = {
     type = "string",
