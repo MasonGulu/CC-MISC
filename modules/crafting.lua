@@ -96,12 +96,10 @@ init = function(loaded, config)
   end
   local function loadJson(json)
     if jsonTypeHandlers[json.type] then
-      print("Handling", json.type)
       jsonLogger:info("Importing JSON of type %s", json.type)
       jsonTypeHandlers[json.type](json)
     else
       jsonLogger:info("Skipping JSON of type %s, no handler available", json.type)
-      print("Skipping", json.type)
     end
   end
 
@@ -559,7 +557,6 @@ init = function(loaded, config)
         end
         if allChildrenDone then
           -- this is ready to be crafted
-          print("ready to be crafted", node.type, node.taskId)
           deleteNodeChildren(node)
           removeFromArray(waitingQueue, node)
           if node.type == "ROOT" then
