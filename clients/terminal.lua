@@ -395,12 +395,14 @@ local function inputHandler()
     elseif e[1] == "key" then
       handleKey(e[2])
     elseif e[1] == "mouse_click" then
-      if mode == "SEARCH" then
-        selectedItem = getFirstItemOnScreen(selectedItem, siftedList) + e[4] - 4
-        changeMode("INFO")
-      elseif mode == "CRAFT" then
-        selectedCraft = getFirstItemOnScreen(selectedCraft, siftedCraftables) + e[4] - 4
-        changeMode("REQUEST")
+      if e[4] > 3 then
+        if mode == "SEARCH" then
+          selectedItem = math.max(math.min(getFirstItemOnScreen(selectedItem, siftedList) + e[4] - 4, #siftedList), 1)
+          changeMode("INFO")
+        elseif mode == "CRAFT" then
+          selectedCraft = math.max(math.min(getFirstItemOnScreen(selectedCraft, siftedCraftables) + e[4] - 4, #siftedList), 1)
+          changeMode("REQUEST")
+        end
       end
     elseif e[1] == "mouse_scroll" then
       if mode == "SEARCH" then
