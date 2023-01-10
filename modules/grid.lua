@@ -20,6 +20,7 @@ config = {
     default = 8,
   }
 },
+---@param loaded {crafting: modules.crafting, logger: modules.logger|nil}
 init = function(loaded,config)
   ---@alias RecipeEntry ItemIndex|ItemIndex[]
 

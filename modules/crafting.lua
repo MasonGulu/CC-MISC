@@ -379,6 +379,35 @@ init = function(loaded, config)
     }
   end
 
+  ---Attempt a craft
+  ---@param node CraftingNode
+  ---@param name string
+  ---@param remaining integer
+  ---@param requestChain table
+  ---@param jobId string
+  ---@return number
+  local function _attemptCraft(node,name,remaining,requestChain,jobId)
+    common.enforceType(node, 1, "table")
+    common.enforceType(name, 2, "string")
+    common.enforceType(remaining,3,"integer")
+    common.enforceType(requestChain,4,"table")
+    common.enforceType(jobId,5,"string")
+    local success = false
+    for k,v in pairs(requestCraftTypes) do
+      success = v(node, name, remaining, requestChain)
+      if success then
+        craftLogger:debug("Recipe found. provider:%s,name:%s,count:%u,taskId:%s,jobId:%s", k, name, node.count, node.taskId, jobId)
+        craftLogger:info("Recipe for %s was provided by %s", name, k)
+        break
+      end
+    end
+    if not success then
+      craftLogger:debug("No recipe found for %s", name)
+      node = createMissingNode(name, remaining, jobId)
+    end
+    return remaining - node.count
+  end
+
   ---@param name string item name
   ---@param count integer
   ---@param jobId string
@@ -417,20 +446,7 @@ init = function(loaded, config)
         remaining = remaining - allocateAmount
         craftLogger:debug("Item. name:%s,count:%u,taskId:%s,jobId:%s", name, allocateAmount, node.taskId, jobId)
       else
-        local success = false
-        for k,v in pairs(requestCraftTypes) do
-          success = v(node, name, remaining, requestChain)
-          if success then
-            craftLogger:debug("Recipe. provider:%s,name:%s,count:%u,taskId:%s,jobId:%s", k, name, node.count, node.taskId, jobId)
-            craftLogger:info("Recipe for %s was provided by %s", name, k)
-            break
-          end
-        end
-        if not success then
-          craftLogger:debug("No recipe found for %s", name)
-          node = createMissingNode(name, remaining, jobId)
-        end
-        remaining = remaining - node.count
+        remaining = _attemptCraft(node, name, remaining, requestChain, jobId)
       end
       table.insert(nodes, node)
     end
