@@ -3,7 +3,7 @@ local common = require("common")
 ---@class modules.grid
 return {
 id = "grid",
-version = "1.0.2",
+version = "1.1.0",
 config = {
   modem = {
     type = "string",
@@ -19,6 +19,10 @@ config = {
     description = "Keep alive ping frequency",
     default = 8,
   }
+},
+dependencies = {
+  logger = {min="1.1",optional=true},
+  crafting = {min="1.1"},
 },
 ---@param loaded {crafting: modules.crafting, logger: modules.logger|nil}
 init = function(loaded,config)

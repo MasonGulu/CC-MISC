@@ -3,13 +3,17 @@ local common = require("common")
 ---@field interface modules.crafting.interface
 return {
 id = "crafting",
-version = "1.0.2",
+version = "1.1.0",
 config = {
   tagLookup = {
     type="table",
     description="Force a given item to be used for a tag lookup. Map from tag->item.",
     default={}
   }
+},
+dependencies = {
+  logger = {min="1.1",optional=true},
+  inventory = {min="1.1"}
 },
 init = function(loaded, config)
   local log = loaded.logger

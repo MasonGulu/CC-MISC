@@ -2,7 +2,7 @@
 ---@field interface modules.logger.interface
 return {
 id = "logger",
-version = "1.0.0",
+version = "1.1.0",
 config = {
   file = {
     type = "string",

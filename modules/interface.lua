@@ -3,7 +3,12 @@ local common = require "common"
 ---@field interface modules.interface.interface
 return {
 id="interface",
-version="1.0.1",
+version="1.1.0",
+dependencies = {
+  inventory = {min="1.1"},
+  crafting = {optional=true, min="1.1"},
+  grid = {optional=true, min="1.1"},
+},
 ---@param loaded {inventory: modules.inventory, crafting: modules.crafting|nil, grid: modules.grid|nil}
 init=function (loaded,config)
   loaded = loaded

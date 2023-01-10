@@ -2,20 +2,51 @@ local common = require("common")
 local printf = common.printf
 
 ---@type table array of module filenames to load
-local modules = {
-  "modules.logger",
-  "modules.inventory",
-  "modules.crafting",
-  "modules.grid",
-  "modules.interface",
-  "modules.modem"
-}
+local moduleFilenames = {}
+
+local function loadModuleList(filename)
+  local f = assert(fs.open(filename, "r"))
+  local line = f.readLine()
+  while line do
+    if line:sub(-4) == ".lua" then
+      line = line:sub(1,-5)
+    end
+    line:gsub("/",".")
+    table.insert(moduleFilenames, line)
+    line = f.readLine()
+  end
+end
+
+local function loadModulesFolder(foldername)
+  local list = fs.list(foldername)
+  for _, fn in ipairs(list) do
+    if not fs.isDir(fn) and fn:sub(-4) == ".lua" then
+      local moduleFn = foldername.."."..fn:gsub("/","."):sub(1,-5)
+      table.insert(moduleFilenames, moduleFn)
+    end
+  end
+end
+
+local args = {...}
+if args[1] then
+  if fs.isDir(args[1]) then
+    loadModulesFolder(args[1])
+  else
+    loadModuleList(args[1])
+  end
+else
+  print("No file/folder specified, loading from /modules/")
+  loadModulesFolder("modules")
+end
+
+--- Load section
 
 -- A module should return a table that contains at least the following fields
 ---@class module
 ---@field id string
----@field config table<string, configspec>|nil
+---@field config table<string, configspec>?
 ---@field init fun(modules:table,config:table):table
+---@field dependencies table<string,{min:string?,max:string?,optional:boolean?}>
 
 ---@class configspec
 ---@field default any
@@ -23,18 +54,23 @@ local modules = {
 
 ---@type table loaded config information
 local config = {}
----@type table array of module IDs in init order
-local moduleInitOrder = {}
----@type table [id] -> module return info
+
+
+---@type module[] table of modules to sort to determine load order
+local unorderedModules = {}
+
+---@type table<string,module>
 local loaded = {}
-for _,v in ipairs(modules) do
+for _,v in ipairs(moduleFilenames) do
   ---@type module
   local mod = require(v)
+  table.insert(unorderedModules, mod)
   loaded[mod.id] = mod
   config[mod.id] = mod.config
-  table.insert(moduleInitOrder, mod.id)
   printf("Loaded %s v%s", mod.id, mod.version)
 end
+
+-- Load order determination
 
 local function protectedIndex(t, ...)
   local curIndex = t
@@ -46,6 +82,105 @@ local function protectedIndex(t, ...)
   end
   return curIndex
 end
+
+---@type module[] table of sorted modules to sort to determine load order
+local moduleInitOrder = {}
+
+local function split(inputstr, sep)
+  if sep == nil then
+    sep = "%s"
+  end
+  local t={}
+  for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+    table.insert(t, str)
+  end
+  return t
+end
+
+
+---Check if a given version is within the given range, if no max is given all MINOR versions are accepted
+---@param ver string
+---@param min string
+---@param max string?
+---@return boolean
+---@nodiscard
+local function checkSemVer(ver, min, max)
+  local verSplit = split(ver,".")
+  local minSplit = split(min,".")
+  -- check min
+  local verMajor = tonumber(verSplit[1])
+  local verMinor = tonumber(verSplit[2])
+  local minMajor = tonumber(minSplit[1])
+  local minMinor = tonumber(minSplit[2])
+
+  if verMajor < minMajor or (verMajor == minMajor and verMinor < minMinor) then
+    return false
+  end
+
+  if max then
+    local maxSplit = split(max, ".")
+    local maxMajor = tonumber(maxSplit[1])
+    local maxMinor = tonumber(maxSplit[2])
+    if verMajor > maxMajor or (verMajor == maxMajor and verMinor > maxMinor) then
+      return false
+    end
+  elseif verMajor > minMajor then
+    return false
+  end
+  return true
+end
+
+-- https://en.wikipedia.org/wiki/Topological_sorting#Depth-first_search
+---@param module module
+local function visit(module)
+  if module.permanant then
+    return
+  elseif module.temporary then
+    error("Cyclic dependency tree")
+  end
+  module.temporary = true
+
+  for id, info in pairs(module.dependencies or {}) do
+    local depModule = loaded[id]
+    if depModule then
+      if not checkSemVer(depModule.version, info.min, info.max) then
+        if info.max then
+          error(("Module %s requires %s [v%s.*,v%s.*]. v%s loaded."):format(module.id, id, info.min, info.max, depModule.version))
+        else
+          error(("Module %s requires %s v%s.*. v%s loaded."):format(module.id, id, info.min, depModule.version))
+        end
+      end
+      visit(depModule)
+    elseif not info.optional then
+      error(("Module %s requires %s, which is not present."):format(module.id,id))
+    end
+  end
+
+  module.temporary = nil
+  module.permanant = true
+  table.insert(moduleInitOrder,module)
+end
+
+local function getUnmarked()
+  for k,v in pairs(unorderedModules) do
+    if not v.permanant then
+      return v
+    end
+  end
+  return nil
+end
+
+local unmarked = getUnmarked()
+while unmarked do
+  visit(unmarked)
+  unmarked = getUnmarked()
+end
+
+for k,v in pairs(unorderedModules) do
+  v.permanant = nil
+end
+
+--- Config validation section
 
 local function getValue(type)
   while true do
@@ -72,7 +207,6 @@ local function getValue(type)
 end
 
 local loadedConfig = common.loadTableFromFile("config.txt") or {}
-local badOptions = {}
 for id, spec in pairs(config) do
   for name, info in pairs(spec) do
     local loadedValue = protectedIndex(loadedConfig, id, name, "value")
@@ -95,6 +229,11 @@ for id, spec in pairs(config) do
       end
     end
   end
+end
+
+-- Persist old settings
+for k,v  in pairs(loadedConfig) do
+  config[k] = config[k] or v
 end
 
 local function saveConfig()
@@ -130,6 +269,7 @@ loaded.config = {
   }
 }
 
+--- Initialization section
 
 ---@type thread[] array of functions to run all the modules
 local moduleExecution = {}
@@ -137,8 +277,7 @@ local moduleExecution = {}
 local moduleFilters = {}
 ---@type string[]
 local moduleIds = {}
-for _,v in ipairs(moduleInitOrder) do
-  local mod = loaded[v]
+for _,mod in ipairs(moduleInitOrder) do
   if mod.init then
     local t0 = os.clock()
     -- The table returned by init will be placed into [id].interface
@@ -153,6 +292,8 @@ for _,v in ipairs(moduleInitOrder) do
   end
 end
 
+--- Execution section
+
 ---Save a crash report
 ---@param module string module name that crashed
 ---@param stacktrace string module stacktrace
@@ -166,15 +307,13 @@ local function saveCrashReport(module, stacktrace, error)
   end
   f.write("===MISC Crash Report===\n")
   f.write(("Generated on %s\n"):format(os.date()))
-  f.write(("There were %u modules loaded.\n"):format(#modules))
-  for k,v in pairs(loaded) do
-    if k ~= "config" then
-      local icon = "-"
-      if v.id == module then
-        icon = "*"
-      end
-      f.write(("%s %s v%s\n"):format(icon,v.id,v.version))
+  f.write(("There were %u modules loaded.\n"):format(#moduleFilenames))
+  for _,v in ipairs(moduleInitOrder) do
+    local icon = "-"
+    if v.id == module then
+      icon = "*"
     end
+    f.write(("%s %s v%s\n"):format(icon,v.id,v.version))
   end
   f.write("--- ERROR\n")
   f.write(error)

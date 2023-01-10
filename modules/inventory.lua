@@ -3,7 +3,7 @@ local common = require("common")
 ---@field interface modules.inventory.interface
 return {
 id = "inventory",
-version = "1.0.0",
+version = "1.1.0",
 config = {
   inventories = {
     type = "table",
@@ -34,6 +34,9 @@ config = {
     description = "Defragment the storage each time the queue is flushed.",
     default = false
   }
+},
+dependencies = {
+  logger = {min="1.1",optional=true},
 },
 setup = function(moduleConfig)
   local attachedInventories = {}
