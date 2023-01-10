@@ -30,7 +30,7 @@ Then adding as many crafty turtles running `/clients/crafter.lua` as you'd like.
 To install the MISC server, you will need the following files.
 * The main executable, `storage.lua`
 * The modules you'd like in `/modules/`, (`/modules/inventory.lua` is required)
-  * Currently module load order and setup is defined at the top of `storage.lua`. Simply add the modules you'd like to load to the `modules` table.
+  * Module load order is determined automatically based on each module's dependencies list. For more information see the general [module documentation](/docs/modules/index.md).
 * The shared library, `common.lua`
 * [`abstractInvLib.lua`](https://gist.github.com/MasonGulu/57ef0f52a93304a17a9eaea21f431de6) For ease of development there is currently a copy in this repository.
 
