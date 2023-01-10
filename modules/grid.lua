@@ -1,8 +1,9 @@
 --- Grid crafting recipe handler
 local common = require("common")
+---@class modules.grid
 return {
 id = "grid",
-version = "1.0.1",
+version = "1.1.0",
 config = {
   modem = {
     type = "string",
@@ -19,6 +20,11 @@ config = {
     default = 8,
   }
 },
+dependencies = {
+  logger = {min="1.1",optional=true},
+  crafting = {min="1.1"},
+},
+---@param loaded {crafting: modules.crafting, logger: modules.logger|nil}
 init = function(loaded,config)
   ---@alias RecipeEntry ItemIndex|ItemIndex[]
 
@@ -348,14 +354,18 @@ init = function(loaded,config)
     node.height = recipe.height
     node.children = {}
     node.name = name
+    local requiredItemCounts = {}
     for k,v in pairs(plan) do
       v.count = toCraft
       if v.tag then
         -- this is a tag we could not resolve, so make a placeholder node
         table.insert(node.children, crafting.createMissingNode(v.tag, v.count, node.jobId))
       else
-        crafting.mergeInto(crafting.craft(v.name, v.count, node.jobId, nil, requestChain), node.children)
+        requiredItemCounts[v.name] = (requiredItemCounts[v.name] or 0) + v.count
       end
+    end
+    for k,v in pairs(requiredItemCounts) do
+      crafting.mergeInto(crafting.craft(k, v, node.jobId, nil, requestChain), node.children)
     end
     for k,v in pairs(node.children) do
       v.parent = node
@@ -452,6 +462,7 @@ init = function(loaded,config)
     -- end
   end
   crafting.addCraftingHandler("grid", craftingHandler)
+  ---@class modules.grid.interface
   return {
     start = function()
       -- loaded.crafting.interface.request_craft("minecraft:piston", 128)

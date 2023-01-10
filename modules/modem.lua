@@ -1,6 +1,8 @@
+---@class modules.modem
+---@field interface modules.modem.interface
 return {
 id = "modem",
-version = "1.0.0",
+version = "1.1.0",
 config = {
   modem = {
     type = "string",
@@ -16,6 +18,10 @@ config = {
     description = "Port to send storage content updates on",
     default=51
   }
+},
+dependencies = {
+  logger = {min="1.1",optional=true},
+  interface = {min="1.1"}
 },
 init = function(loaded, config)
   local log = loaded.logger
@@ -94,6 +100,7 @@ init = function(loaded, config)
       end
     end
   end
+  ---@class modules.modem.interface
   return interface
 end
 }

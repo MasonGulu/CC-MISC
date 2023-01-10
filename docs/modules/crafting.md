@@ -45,12 +45,34 @@ Use `interface.recipeInterface.addJsonTypeHandler(jsonType, func)` to register a
 
 
 ## Crafting System
-When a craft is requested `recipeInterface.craft` is called. This starting call has a flag to force the function to find a craft handler for it. `craft` calls each craft handler until one returns true. If none return true there is no recipe available for the item and the craft fails. The craft handler will modify the node, and when necessary call `craft` recursively (making sure to pass in the recursion-protection table).
+When a craft is requested `recipeInterface.craft` is called. This starting call has a flag to force the function to craft it.
 
-A craft node has multiple states, when the crafting system is ticked the corrosponding handler for each node type and state is called.
+If the `craft` function is allowed to, it will first check if the item already exists in the storage system (minus the reserved item cache). If it does, it creates a node type `ITEM`, if that wasn't enough it repeats the process of choosing to craft or use an item, if it's a tag this may resolve differently.
 
-Here's a chart of crafting node states
-![Crafting Node States](/assets/crafting_node_states.png)
+`craft` calls each registered craft handler until one returns true. If none return true then there is no recipe for the item, and a special node of type `MISSING` is created. The craft continues like normal, but gets flagged as not successful.
 
-Here's an example of a generated crafting tree
-![Example Crafting Tree](/assets/example_crafting_tree.png)
+The craft handler will modify the passed in node to change its `type`, `count`, and any additional fields your craft module requires. If the craft requires items you can call `craft` again (passing in the recursion protection table), then you should add the nodes `craft` returns to your node's `children` table.
+
+Once you're done, just return `true` to signal the system that you created a recipe.
+
+A craft node has a type and one of several states, when the crafting system is ticked the corrosponding handler for each node type and state is called.
+
+The node states are as follows
+* `WAITING` - This recipe is waiting for its children tasks to be `DONE`
+* `READY` - This recipe is ready to be crafted, but may be waiting for a machine to be available.
+* `CRAFTING` - This recipe is currently being crafted.
+* `DONE` - This node has been crafted and the item is in the system.
+
+The existing node types are
+* `ROOT` - Special indicator, this node signals the top of a crafting tree
+* `ITEM` - This represents a quantity of items from the storage
+* `MISSING` - This represents a quantity of items missing from the craft
+* `GRID` - This is provided by `grid`, and represents a grid recipe
+
+### Node crafting states
+
+![Crafting Node States](/docs/assets/crafting_node_states.png)
+
+### Example crafting tree
+
+![Example Crafting Tree](/docs/assets/example_crafting_tree.png)

@@ -6,7 +6,13 @@ nav_order: 2
 # Modules
 Modules are the main way to customize the storage system and add functionality. `storage.lua` is the entrypoint and loader for your configured modules.
 
-Currently, to configure the modules you want to have selected edit the `modules` table at the top of `storage.lua`. I am planning on replacing this
+There are 3 ways to load modules. 
+* Running `storage.lua` without args will scan `/modules/` and load all `.lua` files in there as modules.
+* Pass in a filename as the first arg to read a newline seperated list of modules to load from the file.
+  * Supports paths with `/` or `.`, and supports including or excluding `.lua` (but you should exclude it anyways).
+* Pass in a folder as the first arg to load all `.lua` files in that folder as modules.
+
+Module load order is automatically determined.
 
 # Development information
 The entrypoint, `storage.lua` is nothing more than a module and config loader.
@@ -23,6 +29,13 @@ config = {
     -- when this is loaded and passed into init the value of this option will be at ["value"]
   }
 },
+dependencies = { -- this table is optional, but if you don't include something you're dependant on it may be loaded out of order.
+  inventory = {
+    min = "1.0", -- this is checked against the first two "numbers" of the module semver. By default the MINOR version is allowed to be anything greater than provided, and MAJOR must be same as provided.
+    max = "1.5", -- If you set a maximum version you *can* allow higher MAJOR versions. But this isn't required.
+    optional = true, -- you can choose to make this dependency optional, if it's optional this will only effect load order.
+  }
+}
 -- This function is optional. If present, this function will be called whenever a nil config option is encountered in this module's settings.
 -- The moduleConfig passed in is the config settings for this specific module.
 -- It is asserted that all settings are set to valid values when this function returns.
@@ -59,7 +72,9 @@ There are multiple stages in module loading. Loading, config loading, initializi
 
 The first thing done is to load each module, all that happens here is each module is `require`'d and stuck into the `modules` table
 
-The second thing done is to load and validate the config.
+Next the module load order is determined based off each modules' defined `dependencies`.
+
+The third thing done is to load and validate the config.
 
 Then each module's `init` function is called, and anything returned is placed into the `interface` key.
 
