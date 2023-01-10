@@ -68,8 +68,10 @@ The existing node types are
 * `MISSING` - This represents a quantity of items missing from the craft
 * `GRID` - This is provided by `grid`, and represents a grid recipe
 
-Here's a chart of crafting node states
+### Node crafting states
+
 ![Crafting Node States](/docs/assets/crafting_node_states.png)
 
-Here's an example of a generated crafting tree
+### Example crafting tree
+
 ![Example Crafting Tree](/docs/assets/example_crafting_tree.png)
