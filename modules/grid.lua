@@ -3,7 +3,7 @@ local common = require("common")
 ---@class modules.grid
 return {
 id = "grid",
-version = "1.1.0",
+version = "1.1.1",
 config = {
   modem = {
     type = "string",
@@ -157,7 +157,12 @@ init = function(loaded,config)
 
   ---Load the grid recipes from a file
   local function loadGridRecipes()
-    local f = assert(fs.open("recipes/grid_recipes.bin", "rb"))
+    local f = fs.open("recipes/grid_recipes.bin", "rb")
+    if not f then
+      gridRecipes = {}
+      updateCraftableList()
+      return
+    end
     assert(f.read(8) == "GRECIPES", "Invalid grid recipe file.")
     local shapeIndicator = f.read(1)
     while shapeIndicator do
