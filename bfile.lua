@@ -317,9 +317,12 @@ end
 ---Read the struct from a given file
 ---@param self Struct
 ---@param filename string
----@return table
+---@return table|nil
 local function readFile(self,filename)
-  local f = assert(fs.open(filename, "rb"))
+  local f = fs.open(filename, "rb")
+  if not f then
+    return
+  end
   local t = readHandle(self, f)
   f.close()
   return t
