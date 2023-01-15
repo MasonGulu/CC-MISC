@@ -42,6 +42,8 @@ One more thing, if you want a map of one type to another type, of any size, ther
 newStruct:add("map<string,myStruct[]>", "lotsOfStructs")
 
 There's no additional rules to that other than map<keytype,valuetype>. Yes you can have an array of maps. Multidimensional arrays also work.
+
+If you need to unpack a type table so it's in the parent table, set the key to "^".
 ]]
 
 ---Create a rudamentary emulator of a file handle from a string.
@@ -50,7 +52,7 @@ local function stringHandle(str)
   local pointer = 0
 
   local function limitPointer(modifier)
-    pointer = math.max(0,math.min(pointer + (modifier or 0), str:len()-1))
+    pointer = math.max(0,math.min(pointer + (modifier or 0), str:len()))
     return pointer
   end
 
@@ -59,14 +61,15 @@ local function stringHandle(str)
   function handle.read(count)
     local start = pointer+1
     local finish = limitPointer(count or 1)
+    local retStr = str:sub(start,finish)
     if start-1 == finish then
       -- end of string
       return
     end
     if count then
-      return str:sub(start, finish)
+      return retStr
     else
-      return str:sub(start, finish):byte()
+      return retStr:byte()
     end
   end
 
@@ -107,7 +110,7 @@ local structReaders = {
     return select(1,string.unpack("I1",f.read(1)))
   end,
   uint16 = function (f)
-    return select(1,string.unpack(">I2",f.read(1)))
+    return select(1,string.unpack(">I2",f.read(2)))
   end,
   string = function (f)
     local length = string.unpack(">I2", f.read(2))
@@ -119,6 +122,9 @@ local structReaders = {
   end,
   uint32 = function (f)
     return select(1, string.unpack(">I4",f.read(4)))
+  end,
+  number = function (f)
+    return select(1, string.unpack("n", f.read(8)))
   end
 }
 
@@ -138,6 +144,9 @@ local structWriters = {
   end,
   uint32 = function (f,value)
     f.write(string.pack(">I4", value))
+  end,
+  number = function (f, value)
+    f.write(string.pack("n", value))
   end
 }
 
@@ -234,6 +243,11 @@ local function mapWriterGen(keyType, valueType)
   end
 end
 
+---Get a reader and writer for any supported datatype
+---@param datatype string
+---@generic T : any
+---@return fun(f: handle): T
+---@return fun(f: handle, v: T)
 function getReaderWriter(datatype)
   local reader, writer
   local lengthDatatype = datatype:match("%[([%a%d*]-)%]$")
@@ -295,6 +309,21 @@ local function constant(self, value)
   return self
 end
 
+---Add a conditional to the struct
+---Basically, dynamically choose a datatype based on the read character/written data
+---@param self any
+---@param key any
+---@param loadCondition fun(ch: string): string datatype to load
+---@param writeCondition fun(value: table): string, string character indicating condition, datatype to save
+local function conditional(self,key,loadCondition, writeCondition)
+  table.insert(self.structure, {
+    mode = "conditional",
+    key = key,
+    loadCondition = loadCondition,
+    writeCondition = writeCondition
+  })
+end
+
 ---Read the struct from the given file handle
 ---@param self Struct
 ---@param handle handle
@@ -307,8 +336,20 @@ local function readHandle(self,handle)
     elseif v.mode == "constant" then
       local readConstant = handle.read(v.value:len())
       assert(readConstant == v.value, ("Constant does not match. Expected %s, got %s."):format(v.value, readConstant))
+    elseif v.mode == "conditional" then
+      local datatype = v.loadCondition(handle.read(1))
+      local reader = getReaderWriter(datatype)
+      t[v.key] = reader(handle)
     else
       error("Invalid mode "..v.mode)
+    end
+
+    if v.key == "^" then
+      -- unpack this table onto the parent table
+      for k2,v2 in pairs(t[v.key]) do
+        t[k2] = v2
+      end
+      t[v.key] = nil
     end
   end
   return t
@@ -342,11 +383,20 @@ end
 ---@param t table
 local function writeHandle(self,handle,t)
   for k,v in ipairs(self.structure) do
+    local valueToWrite = t[v.key]
+    if v.key == "^" then
+      valueToWrite = t
+    end
+    assert(valueToWrite, "No value at key="..v.key)
     if v.mode == "data" then
-      local value = assert(t[v.key], "No value at key="..v.key)
-      v.writer(handle,value)
+      v.writer(handle,valueToWrite)
     elseif v.mode == "constant" then
       handle.write(v.value)
+    elseif v.mode == "conditional" then
+      local ch, datatype = v.writeCondition(valueToWrite)
+      handle.write(ch)
+      local _, writer = getReaderWriter(datatype)
+      writer(handle, valueToWrite)
     else
       error("Invalid mode "..v.mode)
     end
@@ -387,6 +437,7 @@ local function newStruct(name)
   struct.writeFile = writeFile
   struct.writeHandle = writeHandle
   struct.writeString = writeString
+  struct.conditional = conditional
   struct.name = name
   struct.structure = {}
   structs[name] = struct
@@ -410,4 +461,28 @@ local function addType(type, reader, writer)
   structWriters[type] = writer
 end
 
-return {newStruct=newStruct, getStruct=getStruct, addType=addType}
+---Get a reader for a datatype
+---@param datatype string
+---@generic T : any
+---@return fun(f: handle): T
+local function getReader(datatype)
+  return select(1, getReaderWriter(datatype))
+end
+
+---Get a writer for a datatype
+---@param datatype string
+---@generic T : any
+---@return fun(f: handle, v: T)
+local function getWriter(datatype)
+  return select(2, getReaderWriter(datatype))
+end
+
+return {
+  newStruct=newStruct,
+  getStruct=getStruct,
+  addType=addType,
+  getReaderWriter=getReaderWriter,
+  getReader=getReader,
+  getWriter=getWriter,
+  stringHandle = stringHandle,
+}

@@ -3,7 +3,7 @@ local common = require("common")
 ---@field interface modules.inventory.interface
 return {
 id = "inventory",
-version = "1.1.0",
+version = "1.1.1",
 config = {
   inventories = {
     type = "table",
@@ -33,6 +33,11 @@ config = {
     type = "boolean",
     description = "Defragment the storage each time the queue is flushed.",
     default = false
+  },
+  executeLimit = {
+    type = "number",
+    description = "Maximum number of transfers for abstractInvLib to execute in parallel.",
+    default = 100,
   }
 },
 dependencies = {
@@ -90,6 +95,7 @@ end,
 init = function(loaded, config)
   local log = loaded.logger
   local storage = require("abstractInvLib")(config.inventory.inventories.value)
+  storage.setBatchLimit(config.inventory.executeLimit.value)
   storage.refreshStorage(true)
   local transferQueue = require("common").loadTableFromFile(".cache/transferQueue") or {}
   local transferTimer

@@ -76,7 +76,7 @@ function abstractInventory(inventories, assumeLimits)
   local tagLUT = {}
   -- [tag] -> string[]
 
-  local executeLimit = 30 -- limit of functions to run in parallel
+  local executeLimit = 128 -- limit of functions to run in parallel
 
   ---Execute a table of functions in batches
   ---@param func function[]
@@ -88,7 +88,6 @@ function abstractInventory(inventories, assumeLimits)
       parallel.waitForAll(table.unpack(func, start, batch_end))
     end
   end
-
 
   local function ate(table, item) -- add to end
     table[#table+1] = item
@@ -830,6 +829,23 @@ function abstractInventory(inventories, assumeLimits)
   function api.getSlot(slot)
     expect(1, slot, "number")
     return getGlobalSlot(slot)
+  end
+
+  ---Change the max number of functions to run in parallel
+  ---@param n integer
+  function api.setBatchLimit(n)
+    expect(1, n, "number")
+    assert(n > 0, "Attempt to set negative/0 batch limit.")
+    if n < 10 then
+      print(string.format("Warning, setting a very low batch limit (%u), abstractInvLib will be very slow."):format(n))
+    end
+    if n > 250 then
+      error(string.format("Attempt to set batch limit to %u, the event queue is 256 elements long. This is very likely to result in dropped events.", n), 2)
+    end
+    if n > 150 then
+      print(string.format("Warning, the event queue is 256 elements long and the batch limit is %u. It is possible that you may have dropped events", n))
+    end
+    executeLimit = n
   end
 
   ---Get an inventory peripheral compatible list of items in this storage

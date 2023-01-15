@@ -3,7 +3,7 @@ local common = require("common")
 ---@field interface modules.crafting.interface
 return {
 id = "crafting",
-version = "1.1.0",
+version = "1.2.1",
 config = {
   tagLookup = {
     type="table",
@@ -29,39 +29,32 @@ init = function(loaded, config)
   ---@type table<string,ItemIndex> lookup from name -> item_lookup index
   local itemNameLookup = {}
 
-  local function saveItemLookup()
-    local f = assert(fs.open("recipes/item_lookup.bin", "wb"))
-    f.write("ILUT")
-    for _,v in ipairs(itemLookup) do
-      local itemName = assert(v[1],#itemLookup)
-      if v.tag then
-        f.write("T")
-      else
-        f.write("I")
-      end
-      common.writeString(f, itemName)
+  local bfile = require("bfile")
+  bfile.addType("tag_boolean",function (f)
+    if f.read(1) == "T" then
+      return true
     end
-    f.close()
+    return false
+  end,function (f, v)
+    if v then
+      f.write("T")
+    else
+      f.write("I")
+    end
+  end)
+  bfile.newStruct("item_lookup_entry"):add("tag_boolean","tag"):add("string",1)
+  bfile.newStruct("item_lookup"):constant("ILUT"):add("item_lookup_entry[*]","items")
+
+  local function saveItemLookup()
+    bfile.getStruct("item_lookup"):writeFile("recipes/item_lookup.bin", {items=itemLookup})
   end
   local function loadItemLookup()
-    local f = fs.open("recipes/item_lookup.bin", "rb")
-    if not f then
-      itemLookup = {}
+    itemLookup = {}
+    local items = bfile.getStruct("item_lookup"):readFile("recipes/item_lookup.bin")
+    if not items then
       return
     end
-    assert(f.read(4) == "ILUT", "Invalid item_lookup file")
-    local mode = f.read(1)
-    while mode do
-      local name = common.readString(f)
-      local item = {name}
-      if mode == "I" then
-      elseif mode == "T" then
-        item.tag = true
-      end
-      table.insert(itemLookup, item)
-      mode = f.read(1)
-    end
-    f.close()
+    itemLookup = items.items
     for k,v in pairs(itemLookup) do
       itemNameLookup[v[1]] = k
     end
@@ -417,7 +410,7 @@ init = function(loaded, config)
   ---@param jobId string
   ---@param force boolean|nil
   ---@param requestChain table<string,boolean>|nil table of item names that have been requested
-  ---@return CraftingNode[] leaves ITEM|CG node
+  ---@return CraftingNode[] leaves ITEM|MISSING|other node
   function craft(name, count, jobId, force, requestChain)
     common.enforceType(name,1,"string")
     common.enforceType(count,2,"integer")
@@ -438,7 +431,8 @@ init = function(loaded, config)
       local node = {
         name = name,
         taskId = id(),
-        jobId = jobId
+        jobId = jobId,
+        priority = 1,
       }
       -- First check if we have any of this
       local available = getCount(name)
@@ -514,6 +508,9 @@ init = function(loaded, config)
     if not node then
       error("No node?", 2)
     end
+    if node.state == newState then
+      return
+    end
     if node.state == "WAITING" then
       removeFromArray(waitingQueue, node)
     elseif node.state == "READY" then
@@ -532,6 +529,7 @@ init = function(loaded, config)
       table.insert(craftingQueue, node)
     elseif node.state == "DONE" then
       doneLookup[node.taskId] = node
+      os.queueEvent("crafting_node_done", node.taskId)
     end
   end
 
@@ -629,8 +627,8 @@ init = function(loaded, config)
           removeFromArray(waitingQueue, node)
           if node.type == "ROOT" then
             -- This task is the root of a job
-            -- TODO some notification that the whole job is done!
             nodeStateLogger:info("Finished jobId:%s in %.2fsec", node.jobId, (os.epoch("utc") - node.startTime) / 1000)
+            os.queueEvent("craft_job_done", node.jobId)
             changeNodeState(node, "DONE")
             deleteTask(node)
             return
