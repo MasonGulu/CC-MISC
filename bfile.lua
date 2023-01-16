@@ -105,6 +105,8 @@ local function stringHandle(str)
   return handle
 end
 
+local aliases = {}
+
 local structReaders = {
   uint8 = function (f)
     return select(1,string.unpack("I1",f.read(1)))
@@ -250,6 +252,9 @@ end
 ---@return fun(f: handle, v: T)
 function getReaderWriter(datatype)
   local reader, writer
+  if aliases[datatype] then
+    datatype = aliases[datatype]
+  end
   local lengthDatatype = datatype:match("%[([%a%d*]-)%]$")
   local keyType, valueType = datatype:match("^map<([%S]+),([%S]+)>")
   if lengthDatatype then
@@ -477,6 +482,13 @@ local function getWriter(datatype)
   return select(2, getReaderWriter(datatype))
 end
 
+---Add an alias for a type
+---@param alias string
+---@param t string
+local function addAlias(alias, t)
+  aliases[alias] = t
+end
+
 return {
   newStruct=newStruct,
   getStruct=getStruct,
@@ -485,4 +497,5 @@ return {
   getReader=getReader,
   getWriter=getWriter,
   stringHandle = stringHandle,
+  addAlias = addAlias,
 }

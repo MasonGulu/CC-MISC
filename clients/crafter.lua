@@ -136,9 +136,16 @@ local function colWrite(fg, text)
   term.setTextColor(oldFg)
 end
 
+local function saveState()
+  local f = fs.open(".crafter", "wb")
+  f.write(textutils.serialise({state=state,task=task}))
+  f.close()
+end
+
 local lastState
 ---@param newState State
 local function changeState(newState)
+  saveState()
   if state ~= newState then
     lastStateChange = os.epoch("utc")
     if newState == "ERROR" then
@@ -160,6 +167,14 @@ local function changeState(newState)
   writeBanner()
 end
 
+local f = fs.open(".crafter", "rb")
+if f then
+  local loaded = textutils.unserialise(f.readAll())
+  f.close()
+  state = loaded.state
+  task = loaded.task
+end
+
 local function getItemSlots()
   refreshTurtleInventory()
   local itemSlots = {}
@@ -167,7 +182,6 @@ local function getItemSlots()
     table.insert(itemSlots, i)
   end
   return itemSlots
-
 end
 
 local function empty()
@@ -276,7 +290,10 @@ local function addRecipe(shaped)
       table.insert(recipe, item.name)
     end
   end
-  turtle.craft()
+  if not turtle.craft() then
+    print("Failed to craft")
+    return
+  end
   refreshTurtleInventory()
   local crafted, amount = "", 0
   for _, item in pairs(turtleInventory) do
@@ -375,7 +392,10 @@ interfaceLUT = {
       print("Cancelled.")
     end
   end,
-  empty = empty
+  empty = empty,
+  reset = function ()
+    changeState(STATES.READY)
+  end
 }
 function interface()
   print("Crafting turtle indev")
