@@ -4,6 +4,13 @@
 -- This can also transfer to / from normal inventories, just pass in the peripheral name.
 -- Use {optimal=false} to transfer to / from non-inventory peripherals.
 
+-- Now you can wrap arbratrary slot ranges
+-- To do so, rather than passing in the inventory name when constructing (or adding/removing inventories)
+-- you simply pass in a table of the following format
+-- {name: string, minSlot: integer?, maxSlot: integer?, slots: integer[]?}
+-- If slots is provided that overwrites anything in minSlot and maxSlot
+-- minSlot defaults to 1, and maxSlot defaults to the inventory size
+
 -- Transfers with this inventory are parallel safe iff
 -- * assumeLimits = true
 -- * The limits of the abstractInventorys involved have already been cached
@@ -38,7 +45,7 @@ local abstractInventory
 ---@field capacity number
 
 ---Wrap inventories and create an abstractInventory
----@param inventories table Table of inventory peripheral names to wrap
+---@param inventories table<integer,string|{name: string, minSlot: integer?, maxSlot: integer?, slots: integer[]?}> Table of inventory peripheral names to wrap
 ---@param assumeLimits nil|boolean Default true, assume the limit of each slot is the same, saves a TON of time
 ---@return AbstractInventory
 function abstractInventory(inventories, assumeLimits)
@@ -111,14 +118,6 @@ function abstractInventory(inventories, assumeLimits)
     expect(1, item, "table", "nil")
     expect(2, inventory, "string")
     expect(3, slot, "number")
-    local validInventory = false
-    for k,v in pairs(inventories) do
-      if v == inventory then
-        validInventory = true
-        break
-      end
-    end
-    assert(validInventory, "Attempted to cache invalid inventory")
     local nbt = (item and item.nbt) or "NONE"
     if item and item.name == "" then
       item = nil
@@ -212,24 +211,45 @@ function abstractInventory(inventories, assumeLimits)
     slotNumberLUT = {}
     local deepCacheFunctions = {}
     for _, inventory in pairs(inventories) do
-      emptySlotLUT[inventory] = {}
-      local size = assert(peripheral.call(inventory, "size"), ("%s is not a valid inventory."):format(inventory))
-      for i = 1, size do
-        emptySlotLUT[inventory][i] = true
-        local slotnumber = #slotNumberLUT+1
-        slotNumberLUT[slotnumber] = {inventory=inventory, slot=i}
-        inventorySlotNumberLUT[inventory] = inventorySlotNumberLUT[inventory] or {}
-        inventorySlotNumberLUT[inventory][i] = slotnumber
+      local inventoryName,slots,minSlot,maxSlot
+      if type(inventory) == "table" then
+        inventoryName = inventory.name
+        slots = inventory.slots
+        minSlot = inventory.minSlot or 1
+        maxSlot = inventory.maxSlot or assert(peripheral.call(inventoryName, "size"), ("%s is not a valid inventory."):format(inventoryName))
+      else
+        inventoryName = inventory
+        minSlot = 1
+        maxSlot = assert(peripheral.call(inventoryName, "size"), ("%s is not a valid inventory."):format(inventoryName))
       end
-      inventoryLimit[inventory] = peripheral.call(inventory, "getItemLimit", 1) -- this should make transfers from/to this inventory parallel safe.
+      if not slots then
+        slots = {}
+        for i = minSlot, maxSlot do
+          slots[#slots+1] = i
+        end
+      end
+      emptySlotLUT[inventoryName] = {}
+      for _, i in ipairs(slots) do
+        emptySlotLUT[inventoryName][i] = true
+        local slotnumber = #slotNumberLUT+1
+        slotNumberLUT[slotnumber] = {inventory=inventoryName, slot=i}
+        inventorySlotNumberLUT[inventoryName] = inventorySlotNumberLUT[inventoryName] or {}
+        inventorySlotNumberLUT[inventoryName][i] = slotnumber
+      end
+      inventoryLimit[inventoryName] = peripheral.call(inventoryName, "getItemLimit", 1) -- this should make transfers from/to this inventory parallel safe.
+      local listing = peripheral.call(inventoryName, "list")
       if not deep then
-        for slot, item in pairs(peripheral.call(inventory, "list")) do
-          cacheItem(item, inventory, slot)
+        for _,i in ipairs(slots) do
+          if listing[i] then
+            cacheItem(listing[i], inventoryName, i)
+          end
         end
       else
-        for slot, _ in pairs(peripheral.call(inventory, "list")) do
-          deepCacheFunctions[#deepCacheFunctions+1] = function()
-            cacheSlot(inventory, slot)
+        for _,i in ipairs(slots) do
+          if listing[i] then
+            deepCacheFunctions[#deepCacheFunctions+1] = function()
+              cacheSlot(inventoryName, i)
+            end
           end
         end
       end
