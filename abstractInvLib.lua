@@ -59,27 +59,35 @@ function abstractInventory(inventories, assumeLimits)
     api.assumeLimits = true
   end
 
+  ---@type table<string,table<string,table<CachedItem,CachedItem>>>
   local itemNameNBTLUT = {}
   -- [item.name][nbt][CachedItem] -> CachedItem
 
+  ---@type table<string,table<string,table<CachedItem,CachedItem>>>
   local itemSpaceLUT = {}
   -- [item.name][nbt][CachedItem] -> CachedItem
 
+  ---@type table<string,table<integer,CachedItem>>
   local inventorySlotLUT = {}
   -- [inventory][slot] = CachedItem
 
+  ---@type table<string,integer>
   local inventoryLimit = {}
   -- [inventory] = number
 
+  ---@type table<string,table<integer,boolean|nil>>
   local emptySlotLUT = {}
   -- [inventory][slot] = true|nil
 
+  ---@type table<integer,{inventory:string, slot:integer}
   local slotNumberLUT = {}
   -- [global slot] -> {inventory:string, slot:number}
 
+  ---@type table<string,table<integer,integer>>
   local inventorySlotNumberLUT = {}
   -- [inventory][slot] -> global slot:number
 
+  ---@type table<string,string[]>
   local tagLUT = {}
   -- [tag] -> string[]
 
@@ -1028,6 +1036,8 @@ function abstractInventory(inventories, assumeLimits)
     end
     return count
   end
+
+  api.refreshStorage(true)
 
   return api
 end
