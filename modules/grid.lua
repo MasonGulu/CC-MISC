@@ -3,7 +3,7 @@ local common = require("common")
 ---@class modules.grid
 return {
 id = "grid",
-version = "1.1.2",
+version = "1.1.3",
 config = {
   modem = {
     type = "string",
@@ -104,9 +104,10 @@ init = function(loaded,config)
     local f = assert(fs.open("recipes/grid_recipes.bin", "wb"))
     f.write("GRECIPES")
     for k,v in pairs(gridRecipes) do
+      print(v)
       bfile.getStruct("grid_recipe"):writeHandle(f,v)
       for _,i in ipairs(v.recipe) do
-        bfile.getWriter("grid_recipe")(f,i)
+        bfile.getWriter("grid_recipe_part")(f,i)
       end
     end
     f.close()
@@ -133,6 +134,7 @@ init = function(loaded,config)
     local gridRecipe = {}
     gridRecipe.shaped = shaped
     gridRecipe.produces = produces
+    gridRecipe.name = name
     gridRecipe.recipe = {}
     if shaped then
       for i = 1, 9 do
