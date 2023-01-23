@@ -330,7 +330,7 @@ while true do
   end
   for i, co in ipairs(moduleExecution) do
     if not moduleFilters[co] or moduleFilters[co] == "" or moduleFilters[co] == e[1] then
-      local ok, filter = coroutine.resume(co, table.unpack(e))
+      local ok, filter = coroutine.resume(co, table.unpack(e, 1, e.n))
       if not ok then
         term.setTextColor(colors.red)
         print("Module errored:")
