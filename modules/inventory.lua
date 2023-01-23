@@ -96,7 +96,6 @@ init = function(loaded, config)
   local log = loaded.logger
   local storage = require("abstractInvLib")(config.inventory.inventories.value)
   storage.setBatchLimit(config.inventory.executeLimit.value)
-  storage.refreshStorage(true)
   local transferQueue = require("common").loadTableFromFile(".cache/transferQueue") or {}
   local transferTimer
   local cacheTimer = os.startTimer(config.inventory.cacheTimer.value)
