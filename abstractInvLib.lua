@@ -59,11 +59,11 @@ function abstractInventory(inventories, assumeLimits)
     api.assumeLimits = true
   end
 
-  ---@type table<string,table<string,table<CachedItem,CachedItem>>>
+  ---@type table<string,table<string,CachedItem>>
   local itemNameNBTLUT = {}
   -- [item.name][nbt][CachedItem] -> CachedItem
 
-  ---@type table<string,table<string,table<CachedItem,CachedItem>>>
+  ---@type table<string,table<string,CachedItem>>
   local itemSpaceLUT = {}
   -- [item.name][nbt][CachedItem] -> CachedItem
 
@@ -79,7 +79,7 @@ function abstractInventory(inventories, assumeLimits)
   local emptySlotLUT = {}
   -- [inventory][slot] = true|nil
 
-  ---@type table<integer,{inventory:string, slot:integer}
+  ---@type table<integer,{inventory:string, slot:integer}>
   local slotNumberLUT = {}
   -- [global slot] -> {inventory:string, slot:number}
 
@@ -87,9 +87,13 @@ function abstractInventory(inventories, assumeLimits)
   local inventorySlotNumberLUT = {}
   -- [inventory][slot] -> global slot:number
 
-  ---@type table<string,string[]>
+  ---@type table<string,table<string,boolean>>
   local tagLUT = {}
   -- [tag] -> string[]
+
+  ---@type table<string,table<string,table>>
+  local deepItemLUT = {}
+  -- [name][nbt] -> ItemInfo
 
   local executeLimit = 128 -- limit of functions to run in parallel
 
@@ -106,6 +110,14 @@ function abstractInventory(inventories, assumeLimits)
 
   local function ate(table, item) -- add to end
     table[#table+1] = item
+  end
+
+  local function shallowClone(t)
+    local ct = {}
+    for k,v in pairs(t) do
+      ct[k] = v
+    end
+    return ct
   end
 
   local function removeSlotFromEmptySlots(inventory,slot)
@@ -207,64 +219,81 @@ function abstractInventory(inventories, assumeLimits)
     cacheSlot(item.inventory, item.slot)
   end
 
+  local function refreshInventory(inventory, deep)
+    local deepCacheFunctions = {}
+    local inventoryName,slots,minSlot,maxSlot
+    if type(inventory) == "table" then
+      inventoryName = inventory.name
+      slots = inventory.slots
+      minSlot = inventory.minSlot or 1
+      maxSlot = inventory.maxSlot or assert(peripheral.call(inventoryName, "size"), ("%s is not a valid inventory."):format(inventoryName))
+    else
+      inventoryName = inventory
+      minSlot = 1
+      maxSlot = assert(peripheral.call(inventoryName, "size"), ("%s is not a valid inventory."):format(inventoryName))
+    end
+    if not slots then
+      slots = {}
+      for i = minSlot, maxSlot do
+        slots[#slots+1] = i
+      end
+    end
+    emptySlotLUT[inventoryName] = {}
+    for _, i in ipairs(slots) do
+      emptySlotLUT[inventoryName][i] = true
+      local slotnumber = #slotNumberLUT+1
+      slotNumberLUT[slotnumber] = {inventory=inventoryName, slot=i}
+      inventorySlotNumberLUT[inventoryName] = inventorySlotNumberLUT[inventoryName] or {}
+      inventorySlotNumberLUT[inventoryName][i] = slotnumber
+    end
+    inventoryLimit[inventoryName] = peripheral.call(inventoryName, "getItemLimit", 1) -- this should make transfers from/to this inventory parallel safe.
+    local listings = peripheral.call(inventoryName, "list")
+    if not deep then
+      for _,i in ipairs(slots) do
+        if listings[i] then
+          cacheItem(listings[i], inventoryName, i)
+        end
+      end
+    else
+      for _,i in ipairs(slots) do
+        local listing = listings[i]
+        if listing then
+          deepCacheFunctions[#deepCacheFunctions+1] = function()
+            deepItemLUT[listing.name] = deepItemLUT[listing.name] or {}
+            if deepItemLUT[listing.name][listing.nbt or "NONE"] then
+              local item = shallowClone(deepItemLUT[listing.name][listing.nbt or "NONE"])
+              item.count = listing.count
+              cacheItem(item, inventoryName, i)
+            else
+              local item = peripheral.call(inventoryName, "getItemDetail", i)
+              cacheItem(item, inventoryName, i)
+              deepItemLUT[item.name][item.nbt or "NONE"] = item
+            end
+          end
+        end
+      end
+    end
+    return deepCacheFunctions
+  end
+
   ---Recache the inventory contents
   ---@param deep nil|boolean call getItemDetail on every slot
   function api.refreshStorage(deep)
     if type(deep) == "nil" then
       deep = true
     end
-    itemNameNBTLUT = {}
-    emptySlotLUT = {}
-    inventorySlotLUT = {}
-    slotNumberLUT = {}
+    itemNameNBTLUT, itemSpaceLUT, inventorySlotLUT, inventoryLimit, emptySlotLUT, slotNumberLUT, inventorySlotNumberLUT, tagLUT, deepItemLUT = {}, {}, {}, {}, {}, {}, {}, {}, {}
+    local inventoryRefreshers = {}
     local deepCacheFunctions = {}
     for _, inventory in pairs(inventories) do
-      local inventoryName,slots,minSlot,maxSlot
-      if type(inventory) == "table" then
-        inventoryName = inventory.name
-        slots = inventory.slots
-        minSlot = inventory.minSlot or 1
-        maxSlot = inventory.maxSlot or assert(peripheral.call(inventoryName, "size"), ("%s is not a valid inventory."):format(inventoryName))
-      else
-        inventoryName = inventory
-        minSlot = 1
-        maxSlot = assert(peripheral.call(inventoryName, "size"), ("%s is not a valid inventory."):format(inventoryName))
-      end
-      if not slots then
-        slots = {}
-        for i = minSlot, maxSlot do
-          slots[#slots+1] = i
+      table.insert(inventoryRefreshers, function()
+        for k,v in ipairs(refreshInventory(inventory, deep) or {}) do
+          deepCacheFunctions[#deepCacheFunctions+1] = v
         end
-      end
-      emptySlotLUT[inventoryName] = {}
-      for _, i in ipairs(slots) do
-        emptySlotLUT[inventoryName][i] = true
-        local slotnumber = #slotNumberLUT+1
-        slotNumberLUT[slotnumber] = {inventory=inventoryName, slot=i}
-        inventorySlotNumberLUT[inventoryName] = inventorySlotNumberLUT[inventoryName] or {}
-        inventorySlotNumberLUT[inventoryName][i] = slotnumber
-      end
-      inventoryLimit[inventoryName] = peripheral.call(inventoryName, "getItemLimit", 1) -- this should make transfers from/to this inventory parallel safe.
-      local listing = peripheral.call(inventoryName, "list")
-      if not deep then
-        for _,i in ipairs(slots) do
-          if listing[i] then
-            cacheItem(listing[i], inventoryName, i)
-          end
-        end
-      else
-        for _,i in ipairs(slots) do
-          if listing[i] then
-            deepCacheFunctions[#deepCacheFunctions+1] = function()
-              cacheSlot(inventoryName, i)
-            end
-          end
-        end
-      end
+      end)
     end
-    if deep then
-      batchExecute(deepCacheFunctions)
-    end
+    batchExecute(inventoryRefreshers)
+    batchExecute(deepCacheFunctions)
   end
 
   ---Get an inventory slot for a given item
@@ -376,20 +405,161 @@ function abstractInventory(inventories, assumeLimits)
   end
 
 
-  local function shallowClone(t)
-    local ct = {}
-    for k,v in pairs(t) do
-      ct[k] = v
-    end
-    return ct
-  end
-
   local defaultOptions = {
     optimal = true,
     allowBadTransfers = false,
     autoDeepRefresh = false,
     itemMovedCallback = nil,
   }
+
+  local function pushItemsUnoptimal(targetInventory, name, amount, toSlot, nbt, options)
+    -- This is to a normal inventory
+    local totalMoved = 0
+    local rep = true
+    while totalMoved < amount and rep do
+      local item
+      if type(name) == "number" then
+        -- perform lookup
+        item = getGlobalSlot(name)
+      else
+        item = getItem(name, nbt)
+      end
+      if not item then
+        return totalMoved -- no items to move
+      end
+      local itemCount = item.item.count
+      rep = (itemCount - totalMoved) < amount
+      local expectedMove = math.min(amount - totalMoved, 64)
+      local remainingItems = math.max(0, itemCount - expectedMove)
+      item.item.count = remainingItems
+      if item.count == 0 then
+        cacheItem(nil, item.inventory, item.slot)
+      else
+        cacheItem(item.item, item.inventory, item.slot)
+      end
+      local amountMoved = peripheral.call(item.inventory, "pushItems", targetInventory, item.slot, amount - totalMoved, toSlot)
+      totalMoved = totalMoved + amountMoved
+      refreshItem(item)
+      if options.itemMovedCallback then
+        options.itemMovedCallback()
+      end
+      if amountMoved < itemCount then
+        return totalMoved -- target slot full
+      end
+    end
+    return totalMoved
+  end
+
+  local function pushItemsOptimal(targetInventory, name, amount, toSlot, nbt, options)
+    if type(targetInventory) == "string" then
+      -- We'll see if this is a good optimization or not
+      targetInventory = abstractInventory({targetInventory})
+      targetInventory.refreshStorage()
+    end
+    local theoreticalAmountMoved = 0
+    local actualAmountMoved = 0
+    local transferCache = {}
+    local totalTime = 0
+    local badTransfer
+    while theoreticalAmountMoved < amount do
+      local t0 = os.clock()
+      -- find the cachedItem item in self
+      ---@type CachedItem|nil
+      local cachedItem
+      if type(name) == "number" then
+        cachedItem = getGlobalSlot(name)
+        if not (cachedItem and cachedItem.item) then
+          -- this slot is empty
+          break
+        end
+      else
+        cachedItem = getItem(name, nbt)
+        if not (cachedItem and cachedItem.item) then
+          -- no slots with this item
+          break
+        end
+      end
+      -- check how many items there are available to move
+      local itemsToMove = cachedItem.item.count
+      -- ask the other inventory for a slot with space
+      local destinationInfo
+      if toSlot then
+        destinationInfo = targetInventory._getGlobalSlot(toSlot)
+        if not destinationInfo then
+          local info = targetInventory._getLookupSlot(toSlot)
+          destinationInfo = cacheItem(nil, info.inventory, info.slot)
+        end
+      else
+        destinationInfo = targetInventory._getSlotFor(cachedItem.item.name, nbt)
+        if not destinationInfo then
+          local slot, inventory, capacity = targetInventory._getEmptySpace()
+          if not (slot and inventory) then
+            break
+          end
+          destinationInfo = targetInventory._updateItem(nil, inventory, slot)
+        end
+      end
+      -- determine the amount of items that should get moved
+      local slotCapacity = cachedItem.item.maxCount or destinationInfo.capacity
+      if destinationInfo.item then
+        slotCapacity = slotCapacity - destinationInfo.item.count
+      end
+      itemsToMove = math.min(itemsToMove, slotCapacity, amount - theoreticalAmountMoved)
+      if destinationInfo.item and (destinationInfo.item.name ~= cachedItem.item.name) then
+        itemsToMove = 0
+      end
+      if itemsToMove == 0 then
+        break
+      end
+      -- queue a transfer of that item
+      local fromInv, toInv, fromSlot, limit, slot = cachedItem.inventory, destinationInfo.inventory, cachedItem.slot, itemsToMove, destinationInfo.slot
+      if limit ~= 0 then
+        ate(transferCache, function()
+          local itemsMoved = peripheral.call(fromInv, "pushItems", toInv, fromSlot, limit, slot)
+          if options.itemMovedCallback then
+            options.itemMovedCallback()
+          end
+          actualAmountMoved = actualAmountMoved + itemsMoved
+          if not options.allowBadTransfers then
+            assert(itemsToMove == itemsMoved, ("Expected to move %u items, moved %u"):format(itemsToMove, itemsMoved))
+          elseif not itemsToMove == itemsMoved then
+            badTransfer = true
+          end
+        end)
+      end
+      -- update our cache of that item to include the predicted transfer
+      local updatedItem = shallowClone(cachedItem.item)
+      updatedItem.count = updatedItem.count - itemsToMove
+      -- update the other inventory's cache to include the predicted transfer
+      if not destinationInfo.item then
+        destinationInfo.item = shallowClone(cachedItem.item)
+        destinationInfo.item.count = 0
+      end
+      destinationInfo.item.count = destinationInfo.item.count + itemsToMove
+
+      if updatedItem.count == 0 then
+        cacheItem(nil, cachedItem.inventory, cachedItem.slot)
+      else
+        cacheItem(updatedItem, cachedItem.inventory, cachedItem.slot)
+      end
+
+      targetInventory._updateItem(destinationInfo.item, destinationInfo.inventory, destinationInfo.slot)
+
+      --- Timing stuff
+      local dt = os.clock()-t0
+      totalTime = totalTime + dt
+      theoreticalAmountMoved = theoreticalAmountMoved + itemsToMove
+    end
+    -- execute the inventory transfers
+    -- return amount of items moved
+    batchExecute(transferCache)
+    if badTransfer then
+      -- refresh inventories
+      api.refreshStorage(options.autoDeepRefresh)
+      targetInventory.refreshStorage(options.autoDeepRefresh)
+    end
+    return actualAmountMoved
+  end
 
   --[[
   .########..##.....##..######..##.....##
@@ -429,150 +599,9 @@ function abstractInventory(inventories, assumeLimits)
       end
     end
     if type(targetInventory) == "string" and not options.optimal then
-      -- This is to a normal inventory
-      local totalMoved = 0
-      local rep = true
-      while totalMoved < amount and rep do
-        local item
-        if type(name) == "number" then
-          -- perform lookup
-          item = getGlobalSlot(name)
-        else
-          item = getItem(name, nbt)
-        end
-        if not item then
-          return totalMoved -- no items to move
-        end
-        local itemCount = item.item.count
-        rep = (itemCount - totalMoved) < amount
-        local expectedMove = math.min(amount - totalMoved, 64)
-        local remainingItems = math.max(0, itemCount - expectedMove)
-        item.item.count = remainingItems
-        if item.count == 0 then
-          cacheItem(nil, item.inventory, item.slot)
-        else
-          cacheItem(item.item, item.inventory, item.slot)
-        end
-        local amountMoved = peripheral.call(item.inventory, "pushItems", targetInventory, item.slot, amount - totalMoved, toSlot)
-        totalMoved = totalMoved + amountMoved
-        refreshItem(item)
-        if options.itemMovedCallback then
-          options.itemMovedCallback()
-        end
-        if amountMoved < itemCount then
-          return totalMoved -- target slot full
-        end
-      end
-      return totalMoved
+      return pushItemsUnoptimal(targetInventory, name, amount, toSlot, nbt, options)
     else
-      if type(targetInventory) == "string" then
-        -- We'll see if this is a good optimization or not
-        targetInventory = abstractInventory({targetInventory})
-        targetInventory.refreshStorage()
-      end
-      local theoreticalAmountMoved = 0
-      local actualAmountMoved = 0
-      local transferCache = {}
-      local totalTime = 0
-      local badTransfer
-      while theoreticalAmountMoved < amount do
-        local t0 = os.clock()
-        -- find the cachedItem item in self
-        ---@type CachedItem|nil
-        local cachedItem
-        if type(name) == "number" then
-          cachedItem = getGlobalSlot(name)
-          if not (cachedItem and cachedItem.item) then
-            -- this slot is empty
-            break
-          end
-        else
-          cachedItem = getItem(name, nbt)
-          if not (cachedItem and cachedItem.item) then
-            -- no slots with this item
-            break
-          end
-        end
-        -- check how many items there are available to move
-        local itemsToMove = cachedItem.item.count
-        -- ask the other inventory for a slot with space
-        local destinationInfo
-        if toSlot then
-          destinationInfo = targetInventory._getGlobalSlot(toSlot)
-          if not destinationInfo then
-            local info = targetInventory._getLookupSlot(toSlot)
-            destinationInfo = cacheItem(nil, info.inventory, info.slot)
-          end
-        else
-          destinationInfo = targetInventory._getSlotFor(cachedItem.item.name, nbt)
-          if not destinationInfo then
-            local slot, inventory, capacity = targetInventory._getEmptySpace()
-            if not (slot and inventory) then
-              break
-            end
-            destinationInfo = targetInventory._updateItem(nil, inventory, slot)
-          end
-        end
-        -- determine the amount of items that should get moved
-        local slotCapacity = cachedItem.item.maxCount or destinationInfo.capacity
-        if destinationInfo.item then
-          slotCapacity = slotCapacity - destinationInfo.item.count
-        end
-        itemsToMove = math.min(itemsToMove, slotCapacity, amount - theoreticalAmountMoved)
-        if destinationInfo.item and (destinationInfo.item.name ~= cachedItem.item.name) then
-          itemsToMove = 0
-        end
-        if itemsToMove == 0 then
-          break
-        end
-        -- queue a transfer of that item
-        local fromInv, toInv, fromSlot, limit, slot = cachedItem.inventory, destinationInfo.inventory, cachedItem.slot, itemsToMove, destinationInfo.slot
-        if limit ~= 0 then
-          ate(transferCache, function()
-            local itemsMoved = peripheral.call(fromInv, "pushItems", toInv, fromSlot, limit, slot)
-            if options.itemMovedCallback then
-              options.itemMovedCallback()
-            end
-            actualAmountMoved = actualAmountMoved + itemsMoved
-            if not options.allowBadTransfers then
-              assert(itemsToMove == itemsMoved, ("Expected to move %u items, moved %u"):format(itemsToMove, itemsMoved))
-            elseif not itemsToMove == itemsMoved then
-              badTransfer = true
-            end
-          end)
-        end
-        -- update our cache of that item to include the predicted transfer
-        local updatedItem = shallowClone(cachedItem.item)
-        updatedItem.count = updatedItem.count - itemsToMove
-        -- update the other inventory's cache to include the predicted transfer
-        if not destinationInfo.item then
-          destinationInfo.item = shallowClone(cachedItem.item)
-          destinationInfo.item.count = 0
-        end
-        destinationInfo.item.count = destinationInfo.item.count + itemsToMove
-
-        if updatedItem.count == 0 then
-          cacheItem(nil, cachedItem.inventory, cachedItem.slot)
-        else
-          cacheItem(updatedItem, cachedItem.inventory, cachedItem.slot)
-        end
-
-        targetInventory._updateItem(destinationInfo.item, destinationInfo.inventory, destinationInfo.slot)
-
-        --- Timing stuff
-        local dt = os.clock()-t0
-        totalTime = totalTime + dt
-        theoreticalAmountMoved = theoreticalAmountMoved + itemsToMove
-      end
-      -- execute the inventory transfers
-      -- return amount of items moved
-      batchExecute(transferCache)
-      if badTransfer then
-        -- refresh inventories
-        api.refreshStorage(options.autoDeepRefresh)
-        targetInventory.refreshStorage(options.autoDeepRefresh)
-      end
-      return actualAmountMoved
+      return pushItemsOptimal(targetInventory, name, amount, toSlot, nbt, options)
     end
     error("Invalid targetInventory")
   end
@@ -774,9 +803,6 @@ function abstractInventory(inventories, assumeLimits)
     local t = {}
     for name,nbtt in pairs(itemNameNBTLUT) do
       for nbt,cachedItem in pairs(nbtt) do
-        if nbt == "NONE" then
-          nbt = nil
-        end
         ate(t, cachedItem)
       end
     end
