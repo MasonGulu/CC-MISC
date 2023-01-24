@@ -136,6 +136,12 @@ local function colWrite(fg, text)
   term.setTextColor(oldFg)
 end
 
+local function saveState()
+  local f = fs.open(".crafter", "wb")
+  f.write(textutils.serialise({state=state,task=task}))
+  f.close()
+end
+
 local lastState
 ---@param newState State
 local function changeState(newState)
@@ -146,6 +152,7 @@ local function changeState(newState)
     end
   end
   state = newState
+  saveState()
   local itemSlots = {}
   for i, _ in pairs(turtleInventory) do
     table.insert(itemSlots, i)
@@ -160,6 +167,14 @@ local function changeState(newState)
   writeBanner()
 end
 
+local f = fs.open(".crafter", "rb")
+if f then
+  local loaded = textutils.unserialise(f.readAll())
+  f.close()
+  state = loaded.state
+  task = loaded.task
+end
+
 local function getItemSlots()
   refreshTurtleInventory()
   local itemSlots = {}
@@ -167,7 +182,6 @@ local function getItemSlots()
     table.insert(itemSlots, i)
   end
   return itemSlots
-
 end
 
 local function empty()
@@ -276,7 +290,10 @@ local function addRecipe(shaped)
       table.insert(recipe, item.name)
     end
   end
-  turtle.craft()
+  if not turtle.craft() then
+    print("Failed to craft")
+    return
+  end
   refreshTurtleInventory()
   local crafted, amount = "", 0
   for _, item in pairs(turtleInventory) do
@@ -375,7 +392,10 @@ interfaceLUT = {
       print("Cancelled.")
     end
   end,
-  empty = empty
+  empty = empty,
+  reset = function ()
+    changeState(STATES.READY)
+  end
 }
 function interface()
   print("Crafting turtle indev")
@@ -391,8 +411,31 @@ function interface()
   end
 end
 
+local function resumeState()
+  if state == "CRAFTING" then
+    -- check if we already crafted
+    refreshTurtleInventory()
+    local have = 0
+    for k,v in pairs(turtleInventory) do
+      if v.name == task.name then
+        have = have + v.count
+      end
+    end
+    if have >= task.count then
+      print("Crafting already done. Waiting for connection..")
+      while not connected do
+        sleep()
+      end
+      signalDone()
+    else
+      tryToCraft()
+    end
+  end
+end
+
 local retries = 0
 local function errorChecker()
+  resumeState()
   while true do
     if os.epoch("utc") - lastStateChange > 10000 then
       lastStateChange = os.epoch("utc")
@@ -418,6 +461,8 @@ local function errorChecker()
   end
 end
 
+
+-- os.queueEvent("turtleInventory")
 writeBanner()
 local ok, err = pcall(parallel.waitForAny, interface, keepAlive, modemInterface, turtleInventoryEvent, errorChecker)
 
