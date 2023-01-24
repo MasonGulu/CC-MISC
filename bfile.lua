@@ -489,6 +489,154 @@ local function addAlias(alias, t)
   aliases[alias] = t
 end
 
+local CONTROL = {
+  START_STRING_KEY = "$", -- Strings are null terminated
+  START_INT_KEY = "#", -- Null terminated string representation to allow infinite indicies
+  END = "\25"
+}
+
+local START_DATA = {
+  string = "s",
+  number = "n",
+  booleanTrue = "B",
+  booleanFalse = "b",
+  table = "\24",
+  int = "i", -- This is a number in the range [0,65535] that has been converted to 2 bytes
+}
+
+-- An example table serialized with this library would look something like
+-- {1,hello="test",[3]={"another table!"}} -> 39 bytes
+
+-- START_DATA.table
+-- START_DATA.int \01 -- 2 byte representation --
+-- CONTROL.START_STRING_KEY hello\0 START_DATA.string test\0
+-- CONTROL.START_INT_KEY 3\0 START_DATA
+
+local t0
+local function serialize(T)
+  print("serialize")
+  local isRoot = false
+  if not t0 then
+    isRoot = true
+    t0 = os.epoch("utc")
+  elseif os.epoch("utc") - t0 > 3000 then
+    print("yeilding")
+    t0 = os.epoch("utc")
+    sleep()
+  end
+  local serializedT = ""
+  local keyNum = 0
+  for k, v in pairs(T) do
+    if type(k) == "number" and k ~= keyNum + 1 then -- this is a numeric key, but not an implicit one
+      serializedT = serializedT..CONTROL.START_INT_KEY..tostring(k).."\0"
+    elseif type(k) == "string" then -- this is a string key
+      serializedT = serializedT..CONTROL.START_STRING_KEY..k.."\0"
+    end
+    keyNum = keyNum + 1
+    local valueType = type(v)
+    assert(valueType ~= "function", "Cannot serialize function @ "..tostring(k))
+    if valueType == "number" then
+      if math.floor(v) == v and v >= 0 and v <= 65535 then
+        -- number is an int [0,65535]
+        -- Store in big endian
+        serializedT = serializedT..START_DATA.int..string.char(bit.brshift(v,8), bit.band(v, 0xFF))
+      else
+        serializedT = serializedT..START_DATA.number..tostring(v).."\0"
+      end
+    elseif valueType == "boolean" then
+      if valueType then
+        serializedT = serializedT..START_DATA.booleanTrue
+      else
+        serializedT = serializedT..START_DATA.booleanFalse
+      end
+    elseif valueType == "table" then
+      serializedT = serializedT..START_DATA.table..serialize(v)
+    else -- the only (accepted) possibility left is that this is a string
+      serializedT = serializedT..START_DATA.string..v.."\0"
+    end
+  end
+  if isRoot then
+    t0 = nil
+  end
+  return serializedT..CONTROL.END
+end
+
+-- Return a string decoded from an input string
+-- takes a pointer into a larger string
+-- returns the decoded string and an end pointer
+local function decodeString(s, pointer, limiter, incLevelChar)
+  limiter = limiter or "\0"
+  local decodedString = ""
+  local level = 0
+  while (s:sub(pointer, pointer) ~= limiter) or level > 0 do
+    if s:sub(pointer, pointer) == limiter then
+      level = level - 1
+    elseif s:sub(pointer, pointer) == incLevelChar then
+      level = level + 1
+    end
+    decodedString = decodedString .. s:sub(pointer, pointer)
+    pointer = pointer + 1
+  end
+  return decodedString, pointer
+end
+
+local function unserialize(s)
+  local isRoot = false
+  if not t0 then
+    t0 = os.epoch("utc")
+    isRoot = true
+  elseif os.epoch("utc") - t0 > 3000 then
+    print("yeilding")
+    t0 = os.epoch("utc")
+    sleep()
+  end
+  local pointer = 1
+  local T = {}
+  local key
+  while (s:sub(pointer, pointer) ~= CONTROL.END) and pointer < s:len() do
+    local char = s:sub(pointer, pointer)
+    if char == CONTROL.START_INT_KEY then
+      key, pointer = decodeString(s, pointer+1)
+      key = tonumber(key)
+    elseif char == CONTROL.START_STRING_KEY then
+      key, pointer = decodeString(s, pointer+1)
+    else
+      if char == START_DATA.booleanFalse then
+        T[key or #T+1] = false
+      elseif char == START_DATA.booleanTrue then
+        T[key or #T+1] = true
+      elseif char == START_DATA.string then
+        local str = ""
+        str, pointer = decodeString(s, pointer+1)
+        T[key or #T+1] = str
+      elseif char == START_DATA.number then
+        local str = ""
+        str, pointer = decodeString(s, pointer+1)
+        T[key or #T+1] = tonumber(str)
+      elseif char == START_DATA.table then
+        local str = ""
+        local pointer2 = 1
+        str, pointer2 = decodeString(s, pointer+1, CONTROL.END, START_DATA.table)
+        str = s:sub(pointer+1, pointer2-1)
+        pointer = pointer2
+        T[key or #T+1] = unserialize(str)
+      elseif char == START_DATA.int then
+        local str1 = s:sub(pointer+1, pointer+1)
+        local str2 = s:sub(pointer+2, pointer+2)
+        pointer = pointer + 1
+        local int = bit.blshift(string.byte(str1), 8) + string.byte(str2)
+        T[key or #T+1] = int
+      end
+      key = nil
+    end
+    pointer = pointer + 1
+  end
+  if isRoot then
+    t0 = nil
+  end
+  return T
+end
+
 return {
   newStruct=newStruct,
   getStruct=getStruct,
@@ -498,4 +646,8 @@ return {
   getWriter=getWriter,
   stringHandle = stringHandle,
   addAlias = addAlias,
+  serialize = serialize,
+  serialise = serialize,
+  unserialize = unserialize,
+  unserialise = unserialize,
 }
