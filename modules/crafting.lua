@@ -3,12 +3,17 @@ local common = require("common")
 ---@field interface modules.crafting.interface
 return {
 id = "crafting",
-version = "1.3.0",
+version = "1.3.1",
 config = {
   tagLookup = {
     type="table",
     description="Force a given item to be used for a tag lookup. Map from tag->item.",
     default={}
+  },
+  persistence = {
+    type = "boolean",
+    description="Save all the crafting caches to disk so jobs can be resumed later. (This uses a lot of disk space. ~300 nodes is >1MB, a craft that takes one type of item is 2 nodes / stack + 1 root node).",
+    default = false, -- this is going to be elect-in for now
   }
 },
 dependencies = {
@@ -143,10 +148,17 @@ init = function(loaded, config)
   bfile.newStruct("reserved_items"):add("map<string,string_uint16_map>", "^")
 
   local function saveReservedItems()
+    if not config.crafting.persistence.value then
+      return
+    end
     common.saveTableToFile(".cache/reserved_items.txt", reservedItems)
   end
 
   local function loadReservedItems()
+    if not config.crafting.persistence.value then
+      reservedItems = {}
+      return
+    end
     reservedItems = common.loadTableFromFile(".cache/reserved_items.txt") or {}
   end
 
@@ -171,7 +183,6 @@ init = function(loaded, config)
   local function allocateItems(name, amount, taskId)
     common.enforceType(name,1,"string")
     common.enforceType(amount,2,"integer")
-    --- TODO change this
     reservedItems[name] = reservedItems[name] or {}
     reservedItems[name][taskId] = (reservedItems[name][taskId] or 0) + amount
     saveReservedItems()
@@ -198,7 +209,7 @@ init = function(loaded, config)
     return amount
   end
 
-  local cachedStackSizes = {} -- TODO save this
+  local cachedStackSizes = {}
 
   ---Get the maximum stacksize of an item by name
   ---@param name string
@@ -212,10 +223,13 @@ init = function(loaded, config)
     return cachedStackSizes[name]
   end
 
+  local lastId = 0
   ---Get a psuedorandom uuid
   ---@return string
   local function id()
-    return os.epoch("utc")..math.random(1,100000)..string.char(math.random(65,90))
+    lastId = lastId + 1
+    local genId = os.epoch("utc").."$"..lastId
+    return genId
   end
 
   ---@type table<string,string[]>
@@ -296,7 +310,7 @@ init = function(loaded, config)
       return true, itemsWithTagsCount[1].name
     end
 
-    -- then check if we can craft anything (todo)
+    -- then check if we can craft anything
     local craftableList = listCraftables()
     local isCraftableLUT = {}
     for k,v in pairs(craftableList) do
@@ -360,7 +374,7 @@ init = function(loaded, config)
     end
   end
 
-  ---TODO save/load this
+
   ---Lookup from taskId to the corrosponding CraftingNode
   ---@type table<string,CraftingNode>
   local taskLookup = {}
@@ -382,6 +396,9 @@ init = function(loaded, config)
   end
 
   local function saveTaskLookup()
+    if not config.crafting.persistence.value then
+      return
+    end
     local flatTaskLookup = {}
     for k,v in pairs(taskLookup) do
       flatTaskLookup[k] = shallowClone(v)
@@ -396,15 +413,27 @@ init = function(loaded, config)
         end
       end
     end
-    require "common".saveTableToFile(".cache/flat_task_lookup.txt", flatTaskLookup, false)
+    local f = assert(fs.open(".cache/flat_task_lookup.bin", "wb"))
+    f.write(bfile.serialise(flatTaskLookup))
+    f.close()
   end
 
   local function loadTaskLookup()
+    if not config.crafting.persistence.value then
+      taskLookup = {}
+      return
+    end
     local taskLoaderLogger = setmetatable({}, {__index=function () return function () end end})
     if log then
       taskLoaderLogger = log.interface.logger("crafting","loadTaskLookup")
     end
-    taskLookup = require"common".loadTableFromFile(".cache/flat_task_lookup.txt") or {}
+    local f = fs.open(".cache/flat_task_lookup.bin", "rb")
+    if f then
+      taskLookup = bfile.unserialise(f.readAll() or "")
+      f.close()
+    else
+      taskLookup = {}
+    end
     jobLookup = {}
     waitingQueue = {}
     readyQueue = {}
@@ -646,7 +675,7 @@ init = function(loaded, config)
   end
 
   ---@type table<string,fun(node: CraftingNode)> Process an item in the READY state
-  local readyHandlers = {} -- TODO get this from grid.lua
+  local readyHandlers = {}
 
   ---@param nodeType string
   ---@param func fun(node: CraftingNode)>
@@ -657,7 +686,7 @@ init = function(loaded, config)
   end
 
   ---@type table<string,fun(node: CraftingNode)> Process an item that is in the CRAFTING state
-  local craftingHandlers = {} -- TODO get this from grid.lua
+  local craftingHandlers = {}
 
   ---@param nodeType string
   ---@param func fun(node: CraftingNode)>
@@ -777,11 +806,13 @@ init = function(loaded, config)
     taskLookup[taskId] = nil
   end
 
-  ---TODO save / load this
   ---@type table<JobId,CraftingNode>
   local pendingJobs = {}
 
   local function savePendingJobs()
+    if not config.crafting.persistence.value then
+      return
+    end
     local flatPendingJobs = {}
     for jobIndex, job in pairs(pendingJobs) do
       local clone = shallowClone(job)
@@ -793,11 +824,23 @@ init = function(loaded, config)
       end)
       flatPendingJobs[jobIndex] = clone
     end
-    require"common".saveTableToFile(".cache/pending_jobs.txt", flatPendingJobs)
+    local f = assert(fs.open(".cache/pending_jobs.bin", "wb"))
+    f.write(bfile.serialise(flatPendingJobs))
+    f.close()
   end
 
   local function loadPendingJobs()
-    pendingJobs = require"common".loadTableFromFile(".cache/pending_jobs.txt") or {}
+    if not config.crafting.persistence.value then
+      pendingJobs = {}
+      return
+    end
+    local f = fs.open(".cache/pending_jobs.bin", "rb")
+    if f then
+      pendingJobs = bfile.unserialise(f.readAll() or "")
+      f.close()
+    else
+      pendingJobs = {}
+    end
     runOnAll(pendingJobs, function (node)
       for k,v in pairs(node.children or {}) do
         v.parent = node
@@ -890,15 +933,6 @@ init = function(loaded, config)
     savePendingJobs()
 
     return jobId
-  end
-
-  ---Add the values in table b to table a
-  ---@param a table<string,integer>
-  ---@param b table<string,integer>
-  local function addTables(a,b)
-    for k,v in pairs(b) do
-      a[k] = (a[k] or 0) + v
-    end
   end
 
   ---@alias jobInfo {success: boolean, toCraft: table<string,integer>, toUse: table<string,integer>, missing: table<string,integer>|nil, jobId: JobId}
