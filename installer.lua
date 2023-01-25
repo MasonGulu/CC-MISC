@@ -1,4 +1,8 @@
-local repositoryUrl = "https://raw.githubusercontent.com/MasonGulu/CC-MISC/dev/" -- temporary until stable
+local repositoryUrl = "https://raw.githubusercontent.com/MasonGulu/CC-MISC/master/"
+
+if ({...})[1] == "dev" then
+  repositoryUrl = "https://raw.githubusercontent.com/MasonGulu/CC-MISC/dev/"
+end
 
 local fullInstall = {
   name = "Install MISC and all modules",
