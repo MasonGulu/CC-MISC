@@ -3,7 +3,7 @@ local common = require("common")
 ---@class modules.grid
 return {
 id = "grid",
-version = "1.1.0",
+version = "1.1.3",
 config = {
   modem = {
     type = "string",
@@ -65,38 +65,49 @@ init = function(loaded,config)
     end
   end
 
+  local bfile = require("bfile")
+  bfile.newStruct("grid_recipe_shaped"):add("uint8", "produces"):add("string", "name"):add("uint8", "width"):add("uint8", "height")
+  bfile.newStruct("grid_recipe_unshaped"):add("uint8", "produces"):add("string", "name"):add("uint8", "length")
+  bfile.addType("grid_recipe_part", function (f)
+    local ch = f.read(1)
+    if ch == "S" then
+      return bfile.getReader("uint16")(f)
+    elseif ch == "A" then
+      return bfile.getReader("uint16[uint8]")(f)
+    end
+    error("Grid recipe parse error")
+  end,function (f, value)
+    if type(value) == "table" then
+      f.write("A")
+      bfile.getWriter("uint16[uint8]")(f,value)
+      return
+    end
+    f.write("S")
+    bfile.getWriter("uint16")(f,value)
+  end)
+  bfile.newStruct("grid_recipe"):conditional("^", function (ch)
+    if ch == "S" then
+      return "grid_recipe_shaped"
+    elseif ch == "U" then
+      return "grid_recipe_unshaped"
+    end
+    error("Grid recipe parse error")
+  end, function (value)
+    if value.shaped then
+      return "S", "grid_recipe_shaped"
+    end
+    return "U", "grid_recipe_unshaped"
+  end)
+
   ---Save the grid recipes to a file
   local function saveGridRecipes()
     local f = assert(fs.open("recipes/grid_recipes.bin", "wb"))
     f.write("GRECIPES")
     for k,v in pairs(gridRecipes) do
-      if v.shaped then
-        f.write("S")
-      else
-        f.write("U")
-      end
-      common.writeUInt8(f, v.produces)
-      common.writeString(f, k)
-      if v.shaped then
-        local height = v.height
-        local width = v.width
-        assert(width and height, "Shaped recipe does not have width/height")
-        common.writeUInt8(f,width)
-        common.writeUInt8(f,height)
-        assert(width*height == #v.recipe, "malformed recipe.")
-      else
-        common.writeUInt8(f,#v.recipe)
-      end
+      print(v)
+      bfile.getStruct("grid_recipe"):writeHandle(f,v)
       for _,i in ipairs(v.recipe) do
-        if type(i) == "number" then
-          f.write("S")
-          common.writeUInt16(f, i)
-        elseif type(i) == "table" then
-          f.write("A")
-          common.writeUInt16T(f,i)
-        else
-          error("Invalid recipe contents")
-        end
+        bfile.getWriter("grid_recipe_part")(f,i)
       end
     end
     f.close()
@@ -123,6 +134,7 @@ init = function(loaded,config)
     local gridRecipe = {}
     gridRecipe.shaped = shaped
     gridRecipe.produces = produces
+    gridRecipe.name = name
     gridRecipe.recipe = {}
     if shaped then
       for i = 1, 9 do
@@ -157,43 +169,29 @@ init = function(loaded,config)
 
   ---Load the grid recipes from a file
   local function loadGridRecipes()
-    local f = assert(fs.open("recipes/grid_recipes.bin", "rb"))
+    local f = fs.open("recipes/grid_recipes.bin", "rb")
+    if not f then
+      gridRecipes = {}
+      updateCraftableList()
+      return
+    end
     assert(f.read(8) == "GRECIPES", "Invalid grid recipe file.")
     local shapeIndicator = f.read(1)
     while shapeIndicator do
-      local recipe = {}
+      f.seek(nil, -1)
+      local recipe = bfile.getStruct("grid_recipe"):readHandle(f)
+      recipe.shaped = not recipe.length
       recipe.recipe = {}
-      recipe.produces = common.readUInt8(f)
-      local recipeName = common.readString(f)
-      local length
-      if shapeIndicator == "S" then
-        recipe.shaped = true
-        recipe.width = common.readUInt8(f)
-        recipe.height = common.readUInt8(f)
-      elseif shapeIndicator == "U" then
-        length = common.readUInt8(f)
-      else
-        error("Invalid shape_indicator")
+      for i = 1, recipe.length or (recipe.width*recipe.height) do
+        recipe.recipe[i] = bfile.getReader("grid_recipe_part")(f)
       end
-      for i = 1, (length or recipe.width*recipe.height) do
-        local mode = f.read(1)
-        if mode == "S" then
-          recipe.recipe[i] = common.readUInt16(f)
-        elseif mode == "A" then
-          recipe.recipe[i] = common.readUInt16T(f)
-        else
-          error("Invalid mode")
-        end
-      end
-      gridRecipes[recipeName] = recipe
-      recipe.name = recipeName
+      gridRecipes[recipe.name] = recipe
       cacheAdditional(recipe)
       shapeIndicator = f.read(1)
     end
     updateCraftableList()
   end
 
-  loadGridRecipes()
 
   ---@class Turtle
   ---@field name string
@@ -256,6 +254,8 @@ init = function(loaded,config)
   end
 
   local function getModemMessage(filter, timeout)
+    common.enforceType(filter,1,"function","nil")
+    common.enforceType(timeout,2,"integer","nil")
     local timer
     if timeout then
       timer = os.startTimer(timeout)
@@ -465,7 +465,7 @@ init = function(loaded,config)
   ---@class modules.grid.interface
   return {
     start = function()
-      -- loaded.crafting.interface.request_craft("minecraft:piston", 128)
+      loadGridRecipes()
       parallel.waitForAny(modemMessageHandler, keepAlive)
     end,
     addGridRecipe = addGridRecipe,

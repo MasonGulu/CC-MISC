@@ -241,33 +241,30 @@ local function saveConfig()
 end
 saveConfig()
 
-loaded.config = {
-  interface = {
-    save = saveConfig,
-    ---Attempt to the given setting to the given value
-    ---@param setting table
-    ---@param value any
-    ---@return boolean success
-    set = function(setting, value)
-      if type(value) == setting.type then
-        setting.value = value
-        return true
-      end
-      if setting.type == "number" and tonumber(value) then
-        setting.value = tonumber(value)
-        return true
-      end
-      if setting.type == "table" and value then
-        local val = textutils.unserialise(value)
-        if val then
-          setting.value = val
-          return true
-        end
-      end
-      return false
+---Attempt to the given setting to the given value
+---@param setting table
+---@param value any
+---@return boolean success
+config.set = function(setting, value)
+  if type(value) == setting.type then
+    setting.value = value
+    return true
+  end
+  if setting.type == "number" and tonumber(value) then
+    setting.value = tonumber(value)
+    return true
+  end
+  if setting.type == "table" and value then
+    local val = textutils.unserialise(value)
+    if val then
+      setting.value = val
+      return true
     end
-  }
-}
+  end
+  return false
+end
+
+config.save = saveConfig
 
 --- Initialization section
 
@@ -333,7 +330,7 @@ while true do
   end
   for i, co in ipairs(moduleExecution) do
     if not moduleFilters[co] or moduleFilters[co] == "" or moduleFilters[co] == e[1] then
-      local ok, filter = coroutine.resume(co, table.unpack(e))
+      local ok, filter = coroutine.resume(co, table.unpack(e, 1, e.n))
       if not ok then
         term.setTextColor(colors.red)
         print("Module errored:")

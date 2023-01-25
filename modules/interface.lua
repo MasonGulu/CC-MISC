@@ -3,7 +3,7 @@ local common = require "common"
 ---@field interface modules.interface.interface
 return {
 id="interface",
-version="1.1.0",
+version="1.2.0",
 dependencies = {
   inventory = {min="1.1"},
   crafting = {optional=true, min="1.1"},
@@ -146,19 +146,32 @@ init=function (loaded,config)
 
   local interface = {}
   local inventoryUpdateHandlers = {}
+  local craftJobDoneHandlers = {}
   ---Add a handler for the inventoryUpdate event
   ---@param handler fun(list: table)
   function interface.addInventoryUpdateHandler(handler)
     common.enforceType(handler,1,"function")
     table.insert(inventoryUpdateHandlers, handler)
   end
+  ---Add a handler for the craft_job_done event
+  ---@param handler fun(list: string)
+  function interface.addCraftJobDoneHandler(handler)
+    common.enforceType(handler,1,"function")
+    table.insert(craftJobDoneHandlers, handler)
+  end
   ---Poll for inventoryUpdate events, and distribute to all inventoryUpdateHandlers
   local function inventoryUpdateHandler()
     while true do
-      os.pullEvent("inventoryUpdate")
-      local list = genericInterface.list()
-      for _, f in pairs(inventoryUpdateHandlers) do
-        f(list)
+      local e = {os.pullEvent()}
+      if e[1] == "inventoryUpdate" then
+        local list = genericInterface.list()
+        for _, f in pairs(inventoryUpdateHandlers) do
+          f(list)
+        end
+      elseif e[1] == "craft_job_done" then
+        for _, f in pairs(craftJobDoneHandlers) do
+          f(e[2])
+        end
       end
     end
   end

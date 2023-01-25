@@ -3,7 +3,7 @@ local common = require("common")
 ---@field interface modules.inventory.interface
 return {
 id = "inventory",
-version = "1.1.0",
+version = "1.1.2",
 config = {
   inventories = {
     type = "table",
@@ -33,6 +33,11 @@ config = {
     type = "boolean",
     description = "Defragment the storage each time the queue is flushed.",
     default = false
+  },
+  executeLimit = {
+    type = "number",
+    description = "Maximum number of transfers for abstractInvLib to execute in parallel.",
+    default = 100,
   }
 },
 dependencies = {
@@ -90,11 +95,10 @@ end,
 init = function(loaded, config)
   local log = loaded.logger
   local storage = require("abstractInvLib")(config.inventory.inventories.value)
-  storage.refreshStorage(true)
+  storage.setBatchLimit(config.inventory.executeLimit.value)
   local transferQueue = require("common").loadTableFromFile(".cache/transferQueue") or {}
   local transferTimer
   local cacheTimer = os.startTimer(config.inventory.cacheTimer.value)
-  local transferQueueDiffers = false
   local inventoryLock = false
 
   ---Signal the system to perform a transfer
@@ -136,22 +140,18 @@ init = function(loaded, config)
       end
       local transferQueueCopy = {table.unpack(transferQueue)}
       transferQueue = {}
-      local transferExecution = {}
       for _,v in pairs(transferQueueCopy) do
         local transfer = v
-        table.insert(transferExecution, function ()
-          logger:debug("Transfer %s %s %s %s %s %s %s %s", table.unpack(transfer))
-          local retVal = table.pack(pcall(function() return storage[transfer[2]](table.unpack(transfer,3,transfer.n)) end))
-          if not retVal[1] then
-            logger:error("Transfer %s %s failed with %s", transfer[1], transfer[2], retVal[2])
-            error(retVal[2])
-          end
-          logger:debug("Transfer %s %s finished, returned %s", transfer[1], transfer[2], retVal[2])
-          os.queueEvent("inventoryFinished", transfer[1], table.unpack(retVal, 2))
-        end)
+        logger:debug("Transfer %s %s %s %s %s %s %s %s", table.unpack(transfer))
+        local retVal = table.pack(pcall(function() return storage[transfer[2]](table.unpack(transfer,3,transfer.n)) end))
+        if not retVal[1] then
+          logger:error("Transfer %s %s failed with %s", transfer[1], transfer[2], retVal[2])
+          error(retVal[2])
+        end
+        logger:debug("Transfer %s %s finished, returned %s", transfer[1], transfer[2], retVal[2])
+        os.queueEvent("inventoryFinished", transfer[1], table.unpack(retVal, 2))
       end
-      transferQueueDiffers = true
-      parallel.waitForAll(table.unpack(transferExecution))
+      require("common").saveTableToFile(".cache/transferQueue", transferQueue)
       if config.inventory.defragEachTransfer.value then
         defrag()
       end
@@ -169,10 +169,6 @@ init = function(loaded, config)
       if id == transferTimer then
         performTransfer()
       elseif id == cacheTimer then
-        if transferQueueDiffers then
-          transferQueueDiffers = false
-          require("common").saveTableToFile(".cache/transferQueue", transferQueue)
-        end
         cacheTimer = os.startTimer(config.inventory.cacheTimer.value)
       end
     end
@@ -188,7 +184,7 @@ init = function(loaded, config)
     elseif not transferTimer then
       transferTimer = os.startTimer(config.inventory.flushTimer.value)
     end
-    transferQueueDiffers = true
+    require("common").saveTableToFile(".cache/transferQueue", transferQueue)
   end
 
   ---Generate a pseudo random ID

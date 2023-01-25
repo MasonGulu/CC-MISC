@@ -3,12 +3,17 @@ local common = require("common")
 ---@field interface modules.crafting.interface
 return {
 id = "crafting",
-version = "1.1.0",
+version = "1.3.2",
 config = {
   tagLookup = {
     type="table",
     description="Force a given item to be used for a tag lookup. Map from tag->item.",
     default={}
+  },
+  persistence = {
+    type = "boolean",
+    description="Save all the crafting caches to disk so jobs can be resumed later. (This uses a lot of disk space. ~300 nodes is >1MB, a craft that takes one type of item is 2 nodes / stack + 1 root node).",
+    default = false, -- this is going to be elect-in for now
   }
 },
 dependencies = {
@@ -29,39 +34,27 @@ init = function(loaded, config)
   ---@type table<string,ItemIndex> lookup from name -> item_lookup index
   local itemNameLookup = {}
 
-  local function saveItemLookup()
-    local f = assert(fs.open("recipes/item_lookup.bin", "wb"))
-    f.write("ILUT")
-    for _,v in ipairs(itemLookup) do
-      local itemName = assert(v[1],#itemLookup)
-      if v.tag then
-        f.write("T")
-      else
-        f.write("I")
-      end
-      common.writeString(f, itemName)
+  local bfile = require("bfile")
+  bfile.addType("tag_boolean",function (f)
+    if f.read(1) == "T" then
+      return true
     end
-    f.close()
+    return false
+  end,function (f, v)
+    if v then
+      f.write("T")
+    else
+      f.write("I")
+    end
+  end)
+  bfile.newStruct("item_lookup_entry"):add("tag_boolean","tag"):add("string",1)
+  bfile.newStruct("item_lookup"):constant("ILUT"):add("item_lookup_entry[*]","^")
+
+  local function saveItemLookup()
+    bfile.getStruct("item_lookup"):writeFile("recipes/item_lookup.bin", {items=itemLookup})
   end
   local function loadItemLookup()
-    local f = fs.open("recipes/item_lookup.bin", "rb")
-    if not f then
-      itemLookup = {}
-      return
-    end
-    assert(f.read(4) == "ILUT", "Invalid item_lookup file")
-    local mode = f.read(1)
-    while mode do
-      local name = common.readString(f)
-      local item = {name}
-      if mode == "I" then
-      elseif mode == "T" then
-        item.tag = true
-      end
-      table.insert(itemLookup, item)
-      mode = f.read(1)
-    end
-    f.close()
+    itemLookup = bfile.getStruct("item_lookup"):readFile("recipes/item_lookup.bin") or {}
     for k,v in pairs(itemLookup) do
       itemNameLookup[v[1]] = k
     end
@@ -114,8 +107,6 @@ init = function(loaded, config)
     end
   end
 
-  loadItemLookup()
-
   ---@alias taskID string uuid foriegn key
   ---@alias JobId string
 
@@ -150,44 +141,75 @@ init = function(loaded, config)
   ---@field state NodeState
   ---@field priority integer TODO
 
-  ---@type table<string,integer> item name -> count reserved
+  ---@type table<string,table<string,integer>> item name -> count reserved
   local reservedItems = {}
+
+  bfile.addAlias("string_uint16_map", "map<string,uint16>")
+  bfile.newStruct("reserved_items"):add("map<string,string_uint16_map>", "^")
+
+  local function saveReservedItems()
+    if not config.crafting.persistence.value then
+      return
+    end
+    common.saveTableToFile(".cache/reserved_items.txt", reservedItems)
+  end
+
+  local function loadReservedItems()
+    if not config.crafting.persistence.value then
+      reservedItems = {}
+      return
+    end
+    reservedItems = common.loadTableFromFile(".cache/reserved_items.txt") or {}
+  end
 
   ---Get count of item in system, excluding reserved
   ---@param name string
   ---@return integer
   local function getCount(name)
     common.enforceType(name,1,"string")
-    return loaded.inventory.interface.getCount(name) - (reservedItems[name] or 0)
+    local reservedCount = 0
+    for k,v in pairs(reservedItems[name] or {}) do
+      -- TODO add check to ensure this is not leaked
+      reservedCount = reservedCount + v
+    end
+    return loaded.inventory.interface.getCount(name) - reservedCount
   end
 
   ---Reserve amount of item name
   ---@param name string
   ---@param amount integer
+  ---@param taskId string
   ---@return integer
-  local function allocateItems(name, amount)
+  local function allocateItems(name, amount, taskId)
     common.enforceType(name,1,"string")
     common.enforceType(amount,2,"integer")
-    reservedItems[name] = (reservedItems[name] or 0) + amount
+    reservedItems[name] = reservedItems[name] or {}
+    reservedItems[name][taskId] = (reservedItems[name][taskId] or 0) + amount
+    saveReservedItems()
     return amount
   end
 
   ---Free amount of item name
   ---@param name string
   ---@param amount integer
+  ---@param taskId string
   ---@return integer
-  local function deallocateItems(name, amount)
+  local function deallocateItems(name, amount, taskId)
     common.enforceType(name,1,"string")
     common.enforceType(amount,2,"integer")
-    reservedItems[name] = reservedItems[name] - amount
-    assert(reservedItems[name] >= 0, "We have negative items reserved?")
-    if reservedItems[name] == 0 then
+    reservedItems[name][taskId] = reservedItems[name][taskId] - amount
+    assert(reservedItems[name][taskId] >= 0, "We have negative items reserved?")
+    if reservedItems[name][taskId] == 0 then
+      reservedItems[name][taskId] = nil
+    end
+    if not next(reservedItems[name]) then
       reservedItems[name] = nil
     end
+    saveReservedItems()
     return amount
   end
 
-  local cachedStackSizes = {} -- TODO save this
+  local cachedStackSizes = {}
 
   ---Get the maximum stacksize of an item by name
   ---@param name string
@@ -201,10 +223,13 @@ init = function(loaded, config)
     return cachedStackSizes[name]
   end
 
+  local lastId = 0
   ---Get a psuedorandom uuid
   ---@return string
   local function id()
-    return os.epoch("utc")..math.random(1,100000)..string.char(math.random(65,90))
+    lastId = lastId + 1
+    local genId = os.epoch("utc").."$"..lastId
+    return genId
   end
 
   ---@type table<string,string[]>
@@ -230,19 +255,30 @@ init = function(loaded, config)
     return l
   end
 
+  bfile.newStruct("cached_tags"):add("map<string,string[uint16]>", "^")
+
   ---@type table<string,string[]> tag -> item names
-  local cachedTagLookup = common.loadTableFromFile(".cache/cached_tags.txt") or {}
-  
-  -- TODO load this
+  local cachedTagLookup = {}
+
+  local function saveCachedTags()
+    bfile.getStruct("cached_tags"):writeFile(".cache/cached_tags.bin", cachedTagLookup)
+  end
+
   ---@type table<string,table<string,boolean>> tag -> item name -> is it in cached_tag_lookup
   local cachedTagPresence = {}
-  for tag,names in pairs(cachedTagLookup) do
-    cachedTagPresence[tag] = {}
-    for _, name in ipairs(names) do
-      cachedTagPresence[tag][name] = true
+
+  local function loadCachedTags()
+    cachedTagLookup = bfile.getStruct("cached_tags"):readFile(".cache/cached_tags.bin") or {}
+    cachedTagPresence = {}
+    for tag,names in pairs(cachedTagLookup) do
+      cachedTagPresence[tag] = {}
+      for _, name in ipairs(names) do
+        cachedTagPresence[tag][name] = true
+      end
     end
   end
 
+  
   ---Select the best item from a tag
   ---@param tag string
   ---@return boolean success
@@ -255,6 +291,7 @@ init = function(loaded, config)
     if not cachedTagPresence[tag] then
       cachedTagPresence[tag] = {}
       cachedTagLookup[tag] = {}
+      saveCachedTags()
     end
     -- first check if we have anything
     local itemsWithTag = loaded.inventory.interface.getTag(tag)
@@ -264,7 +301,7 @@ init = function(loaded, config)
         -- update the cache if it's not in there already
         cachedTagPresence[tag][v] = true
         table.insert(cachedTagLookup[tag], v)
-        common.saveTableToFile(".cache/cached_tags.txt", cachedTagLookup)
+        saveCachedTags()
       end
       itemsWithTagsCount[k] = {name=v, count=loaded.inventory.interface.getCount(v)}
     end
@@ -273,7 +310,7 @@ init = function(loaded, config)
       return true, itemsWithTagsCount[1].name
     end
 
-    -- then check if we can craft anything (todo)
+    -- then check if we can craft anything
     local craftableList = listCraftables()
     local isCraftableLUT = {}
     for k,v in pairs(craftableList) do
@@ -337,6 +374,7 @@ init = function(loaded, config)
     end
   end
 
+
   ---Lookup from taskId to the corrosponding CraftingNode
   ---@type table<string,CraftingNode>
   local taskLookup = {}
@@ -355,6 +393,78 @@ init = function(loaded, config)
       nt[k] = v
     end
     return nt
+  end
+
+  local function saveTaskLookup()
+    if not config.crafting.persistence.value then
+      return
+    end
+    local flatTaskLookup = {}
+    for k,v in pairs(taskLookup) do
+      flatTaskLookup[k] = shallowClone(v)
+      local flatTask = flatTaskLookup[k]
+      if v.parent then
+        flatTask.parent = v.parent.taskId
+      end
+      if v.children then
+        flatTask.children = {}
+        for i,ch in pairs(v.children) do
+          flatTask.children[i] = ch.taskId
+        end
+      end
+    end
+    local f = assert(fs.open(".cache/flat_task_lookup.bin", "wb"))
+    f.write(bfile.serialise(flatTaskLookup))
+    f.close()
+  end
+
+  local function loadTaskLookup()
+    if not config.crafting.persistence.value then
+      taskLookup = {}
+      return
+    end
+    local taskLoaderLogger = setmetatable({}, {__index=function () return function () end end})
+    if log then
+      taskLoaderLogger = log.interface.logger("crafting","loadTaskLookup")
+    end
+    local f = fs.open(".cache/flat_task_lookup.bin", "rb")
+    if f then
+      taskLookup = bfile.unserialise(f.readAll() or "")
+      f.close()
+    else
+      taskLookup = {}
+    end
+    jobLookup = {}
+    waitingQueue = {}
+    readyQueue = {}
+    craftingQueue = {}
+    doneLookup = {}
+    for k,v in pairs(taskLookup) do
+      taskLoaderLogger:debug("Loaded taskId=%s,state=%s",v.taskId,v.state)
+      jobLookup[v.jobId] = jobLookup[v.jobId] or {}
+      table.insert(jobLookup[v.jobId], v)
+      if v.parent then
+        v.parent = taskLookup[v.parent]
+      end
+      if v.children then
+        for i,ch in pairs(v.children) do
+          v.children[i] = taskLookup[ch]
+        end
+      end
+      if v.state then
+        if v.state == "WAITING" then
+          table.insert(waitingQueue, v)
+        elseif v.state == "READY" then
+          table.insert(readyQueue, v)
+        elseif v.state == "CRAFTING" then
+          table.insert(craftingQueue, v)
+        elseif v.state == "DONE" then
+          doneLookup[v.taskId] = v
+        else
+          error("Invalid state on load")
+        end
+      end
+    end
   end
 
   local craftLogger = setmetatable({}, {__index=function () return function () end end})
@@ -417,7 +527,7 @@ init = function(loaded, config)
   ---@param jobId string
   ---@param force boolean|nil
   ---@param requestChain table<string,boolean>|nil table of item names that have been requested
-  ---@return CraftingNode[] leaves ITEM|CG node
+  ---@return CraftingNode[] leaves ITEM|MISSING|other node
   function craft(name, count, jobId, force, requestChain)
     common.enforceType(name,1,"string")
     common.enforceType(count,2,"integer")
@@ -438,13 +548,14 @@ init = function(loaded, config)
       local node = {
         name = name,
         taskId = id(),
-        jobId = jobId
+        jobId = jobId,
+        priority = 1,
       }
       -- First check if we have any of this
       local available = getCount(name)
       if available > 0 and not force then
         -- we do, so allocate it
-        local allocateAmount = allocateItems(name, math.min(available, remaining))
+        local allocateAmount = allocateItems(name, math.min(available, remaining), node.taskId)
         node.type = "ITEM"
         node.count = allocateAmount
         remaining = remaining - allocateAmount
@@ -489,7 +600,7 @@ init = function(loaded, config)
   function deleteTask(task)
     common.enforceType(task,1,"table")
     if task.type == "ITEM" then
-      deallocateItems(task.name, task.count)
+      deallocateItems(task.name, task.count, task.taskId)
     end
     if task.parent then
       removeFromArray(task.parent.children, task)
@@ -514,6 +625,9 @@ init = function(loaded, config)
     if not node then
       error("No node?", 2)
     end
+    if node.state == newState then
+      return
+    end
     if node.state == "WAITING" then
       removeFromArray(waitingQueue, node)
     elseif node.state == "READY" then
@@ -532,6 +646,7 @@ init = function(loaded, config)
       table.insert(craftingQueue, node)
     elseif node.state == "DONE" then
       doneLookup[node.taskId] = node
+      os.queueEvent("crafting_node_done", node.taskId)
     end
   end
 
@@ -560,7 +675,7 @@ init = function(loaded, config)
   end
 
   ---@type table<string,fun(node: CraftingNode)> Process an item in the READY state
-  local readyHandlers = {} -- TODO get this from grid.lua
+  local readyHandlers = {}
 
   ---@param nodeType string
   ---@param func fun(node: CraftingNode)>
@@ -571,7 +686,7 @@ init = function(loaded, config)
   end
 
   ---@type table<string,fun(node: CraftingNode)> Process an item that is in the CRAFTING state
-  local craftingHandlers = {} -- TODO get this from grid.lua
+  local craftingHandlers = {}
 
   ---@param nodeType string
   ---@param func fun(node: CraftingNode)>
@@ -597,6 +712,7 @@ init = function(loaded, config)
   ---Update the state of the given node
   ---@param node CraftingNode
   function tickNode(node)
+    saveTaskLookup()
     common.enforceType(node,1,"table")
     if not node.state then
       if node.type == "ROOT" then
@@ -629,8 +745,8 @@ init = function(loaded, config)
           removeFromArray(waitingQueue, node)
           if node.type == "ROOT" then
             -- This task is the root of a job
-            -- TODO some notification that the whole job is done!
             nodeStateLogger:info("Finished jobId:%s in %.2fsec", node.jobId, (os.epoch("utc") - node.startTime) / 1000)
+            os.queueEvent("craft_job_done", node.jobId)
             changeNodeState(node, "DONE")
             deleteTask(node)
             return
@@ -651,50 +767,7 @@ init = function(loaded, config)
     end
   end
 
-  local function saveTaskLookup()
-    local flatTaskLookup = {}
-    for k,v in pairs(taskLookup) do
-      flatTaskLookup[k] = shallowClone(v)
-      local flatTask = flatTaskLookup[k]
-      if v.parent then
-        flatTask.parent = v.parent.taskId
-      end
-      if v.children then
-        flatTask.children = {}
-        for i,ch in pairs(v.children) do
-          flatTask.children[i] = ch.taskId
-        end
-      end
-    end
-    require "common".saveTableToFile("flatTaskLookup.txt", flatTaskLookup, false)
-  end
-
-  local function loadTaskLookup()
-    taskLookup = assert(require"common".loadTableFromFile("flatTaskLookup.txt"), "File does not exist")
-    for k,v in pairs(taskLookup) do
-      if v.parent then
-        v.parent = taskLookup[v.parent]
-      end
-      if v.children then
-        for i,ch in pairs(v.children) do
-          v.children[i] = taskLookup[ch]
-        end
-      end
-      if v.state then
-        if v.state == "WAITING" then
-          table.insert(waitingQueue, v)
-        elseif v.state == "READY" then
-          table.insert(readyQueue, v)
-        elseif v.state == "CRAFTING" then
-          table.insert(craftingQueue, v)
-        elseif v.state == "DONE" then
-          doneLookup[v.taskId] = v
-        else
-          error("Invalid state on load")
-        end
-      end
-    end
-  end
+  
 
   ---Update every node on the tree
   ---@param tree CraftingNode
@@ -736,30 +809,77 @@ init = function(loaded, config)
   ---@type table<JobId,CraftingNode>
   local pendingJobs = {}
 
+  local function savePendingJobs()
+    if not config.crafting.persistence.value then
+      return
+    end
+    local flatPendingJobs = {}
+    for jobIndex, job in pairs(pendingJobs) do
+      local clone = shallowClone(job)
+      runOnAll(clone, function (node)
+        node.parent = nil
+        for k,v in pairs(node.children or {}) do
+          node.children[k] = shallowClone(v)
+        end
+      end)
+      flatPendingJobs[jobIndex] = clone
+    end
+    local f = assert(fs.open(".cache/pending_jobs.bin", "wb"))
+    f.write(bfile.serialise(flatPendingJobs))
+    f.close()
+  end
+
+  local function loadPendingJobs()
+    if not config.crafting.persistence.value then
+      pendingJobs = {}
+      return
+    end
+    local f = fs.open(".cache/pending_jobs.bin", "rb")
+    if f then
+      pendingJobs = bfile.unserialise(f.readAll() or "")
+      f.close()
+    else
+      pendingJobs = {}
+    end
+    runOnAll(pendingJobs, function (node)
+      for k,v in pairs(node.children or {}) do
+        v.parent = node
+      end
+    end)
+  end
+
   ---Cancel a job by given id
   ---@param jobId any
   local function cancelCraft(jobId)
     common.enforceType(jobId,1,"string")
     craftLogger:info("Cancelling job %s", jobId)
+    local jobRoot = jobLookup[jobId]
     if pendingJobs[jobId] then
+      jobRoot = pendingJobs[jobId]
       pendingJobs[jobId] = nil
+      savePendingJobs()
       return
-    end
-    if not jobLookup[jobId] then
+    elseif not jobLookup[jobId] then
       craftLogger:warn("Attempt to cancel non-existant job %s", jobId)
     end
-    for k,v in pairs(jobLookup[jobId] or {}) do
+    for k,v in pairs(jobRoot or {}) do
       cancelTask(v.taskId)
     end
     jobLookup[jobId] = nil
+    saveTaskLookup()
   end
 
   local function tickCrafting()
     while true do
+      local nodesTicked = false
       for k,v in pairs(taskLookup) do
         tickNode(v)
+        nodesTicked = true
       end
-
+      if nodesTicked then
+        craftLogger:debug("Nodes processed in crafting tick.")
+        saveTaskLookup()
+      end
       os.sleep(1)
     end
   end
@@ -807,20 +927,13 @@ init = function(loaded, config)
       children = job,
       type = "ROOT",
       taskId = id(),
+      time = os.epoch("utc"),
     }
 
     pendingJobs[jobId] = root
+    savePendingJobs()
 
     return jobId
-  end
-
-  ---Add the values in table b to table a
-  ---@param a table<string,integer>
-  ---@param b table<string,integer>
-  local function addTables(a,b)
-    for k,v in pairs(b) do
-      a[k] = (a[k] or 0) + v
-    end
   end
 
   ---@alias jobInfo {success: boolean, toCraft: table<string,integer>, toUse: table<string,integer>, missing: table<string,integer>|nil, jobId: JobId}
@@ -860,7 +973,9 @@ init = function(loaded, config)
     craftLogger:debug("Request craft called for %u %s(s), returning job ID %s", count, name, jobId)
     local jobInfo = getJobInfo(pendingJobs[jobId])
     if not jobInfo.success then
-      cancelCraft(jobId)
+      craftLogger:debug("Craft job failed, cancelling")
+      -- cancelCraft(jobId)
+      savePendingJobs()
     end
     return jobInfo
   end
@@ -880,6 +995,7 @@ init = function(loaded, config)
       return false -- cannot start unsuccessful job
     end
     pendingJobs[jobId] = nil
+    savePendingJobs()
     jobLookup[jobId] = {}
     runOnAll(job, function(node)
       taskLookup[node.taskId] = node
@@ -888,6 +1004,32 @@ init = function(loaded, config)
     updateWholeTree(job)
     saveTaskLookup()
     return true
+  end
+
+  local cleanupLogger = setmetatable({}, {__index=function () return function () end end})
+  if log then
+    cleanupLogger = log.interface.logger("crafting","cleanup")
+  end
+  local function cleanupHandler()
+    while true do
+      sleep(60)
+      cleanupLogger:debug("Performing cleanup!")
+      for k,v in pairs(pendingJobs) do
+        if v.time + 200000 < os.epoch("utc") then
+          -- this job is too old
+          cleanupLogger:debug("Removing JobId %s from the pending queue, as it is too old.", v.jobId)
+          pendingJobs[k] = nil
+        end
+      end
+      for name,nodes in pairs(reservedItems) do
+        for nodeId, count in pairs(nodes) do
+          if not taskLookup[nodeId] then
+            cleanupLogger:debug("Deallocating %u of item %s, Node %s is not in the task lookup.", count, name, nodeId)
+            deallocateItems(name, count, nodeId)
+          end
+        end
+      end
+    end
   end
 
   local function jsonFileImport()
@@ -908,7 +1050,12 @@ init = function(loaded, config)
   ---@class modules.crafting.interface
   return {
     start = function()
-      parallel.waitForAny(tickCrafting, inventoryTransferListener, jsonFileImport)
+      loadTaskLookup()
+      loadItemLookup()
+      loadReservedItems()
+      loadCachedTags()
+      loadPendingJobs()
+      parallel.waitForAny(tickCrafting, inventoryTransferListener, jsonFileImport, cleanupHandler)
     end,
 
     requestCraft = requestCraft,
