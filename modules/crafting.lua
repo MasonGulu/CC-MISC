@@ -3,7 +3,7 @@ local common = require("common")
 ---@field interface modules.crafting.interface
 return {
 id = "crafting",
-version = "1.3.1",
+version = "1.3.2",
 config = {
   tagLookup = {
     type="table",
@@ -927,6 +927,7 @@ init = function(loaded, config)
       children = job,
       type = "ROOT",
       taskId = id(),
+      time = os.epoch("utc"),
     }
 
     pendingJobs[jobId] = root
@@ -1005,6 +1006,32 @@ init = function(loaded, config)
     return true
   end
 
+  local cleanupLogger = setmetatable({}, {__index=function () return function () end end})
+  if log then
+    cleanupLogger = log.interface.logger("crafting","cleanup")
+  end
+  local function cleanupHandler()
+    while true do
+      sleep(60)
+      cleanupLogger:debug("Performing cleanup!")
+      for k,v in pairs(pendingJobs) do
+        if v.time + 200000 < os.epoch("utc") then
+          -- this job is too old
+          cleanupLogger:debug("Removing JobId %s from the pending queue, as it is too old.", v.jobId)
+          pendingJobs[k] = nil
+        end
+      end
+      for name,nodes in pairs(reservedItems) do
+        for nodeId, count in pairs(nodes) do
+          if not taskLookup[nodeId] then
+            cleanupLogger:debug("Deallocating %u of item %s, Node %s is not in the task lookup.", count, name, nodeId)
+            deallocateItems(name, count, nodeId)
+          end
+        end
+      end
+    end
+  end
+
   local function jsonFileImport()
     print("JSON file importing ready..")
     while true do
@@ -1028,7 +1055,7 @@ init = function(loaded, config)
       loadReservedItems()
       loadCachedTags()
       loadPendingJobs()
-      parallel.waitForAny(tickCrafting, inventoryTransferListener, jsonFileImport)
+      parallel.waitForAny(tickCrafting, inventoryTransferListener, jsonFileImport, cleanupHandler)
     end,
 
     requestCraft = requestCraft,
