@@ -3,7 +3,7 @@ local common = require("common")
 ---@class modules.grid
 return {
 id = "grid",
-version = "1.1.3",
+version = "1.1.4",
 config = {
   modem = {
     type = "string",
@@ -386,7 +386,13 @@ init = function(loaded,config)
       end
       if availableTurtle then
         crafting.changeNodeState(node, "CRAFTING")
-        sendMessage({task = node}, availableTurtle.name, "CRAFT")
+        local nodeCopy = {}
+        for k,v in pairs(node) do
+          nodeCopy[k] = v
+        end
+        nodeCopy.parent = nil
+        nodeCopy.children = nil
+        sendMessage({task = nodeCopy}, availableTurtle.name, "CRAFT")
         availableTurtle.task = node
         node.turtle = availableTurtle.name
         local transfers = {}

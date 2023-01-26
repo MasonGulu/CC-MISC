@@ -171,8 +171,10 @@ local f = fs.open(".crafter", "rb")
 if f then
   local loaded = textutils.unserialise(f.readAll())
   f.close()
-  state = loaded.state
-  task = loaded.task
+  if loaded then
+    state = loaded.state
+    task = loaded.task
+  end
 end
 
 local function getItemSlots()
