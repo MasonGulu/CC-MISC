@@ -3,7 +3,7 @@ local common = require("common")
 ---@field interface modules.crafting.interface
 return {
 id = "crafting",
-version = "1.3.2",
+version = "1.3.3",
 config = {
   tagLookup = {
     type="table",
@@ -14,6 +14,16 @@ config = {
     type = "boolean",
     description="Save all the crafting caches to disk so jobs can be resumed later. (This uses a lot of disk space. ~300 nodes is >1MB, a craft that takes one type of item is 2 nodes / stack + 1 root node).",
     default = false, -- this is going to be elect-in for now
+  },
+  tickInterval = {
+    type = "number",
+    description = "Interval between crafting ticks in seconds.",
+    default = 1,
+  },
+  cleanupInterval = {
+    type = "number",
+    description = "Interval between cleanup in seconds",
+    default = 60,
   }
 },
 dependencies = {
@@ -880,7 +890,7 @@ init = function(loaded, config)
         craftLogger:debug("Nodes processed in crafting tick.")
         saveTaskLookup()
       end
-      os.sleep(1)
+      os.sleep(config.crafting.tickInterval.value)
     end
   end
 
@@ -1012,7 +1022,7 @@ init = function(loaded, config)
   end
   local function cleanupHandler()
     while true do
-      sleep(60)
+      sleep(config.crafting.cleanupInterval.value)
       cleanupLogger:debug("Performing cleanup!")
       for k,v in pairs(pendingJobs) do
         if v.time + 200000 < os.epoch("utc") then
