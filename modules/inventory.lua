@@ -3,7 +3,7 @@ local common = require("common")
 ---@field interface modules.inventory.interface
 return {
 id = "inventory",
-version = "1.1.2",
+version = "1.1.3",
 config = {
   inventories = {
     type = "table",
@@ -44,17 +44,12 @@ dependencies = {
   logger = {min="1.1",optional=true},
 },
 setup = function(moduleConfig)
-  local attachedInventories = {}
-  local function getAttachedInventoriesToModem(modem)
-    modem = peripheral.wrap(modem)
-    if not modem.isWireless() then return end
-    for _, v in ipairs(modem.getNamesRemote()) do
+  local function getAttachedInventories()
+    local attachedInventories = {}
+    for _, v in ipairs(peripheral.getNames()) do
       if peripheral.hasType(v, "inventory") then attachedInventories[#attachedInventories+1] = v end
     end
-  end
-  for _, v in ipairs(peripheral.getNames()) do
-    if peripheral.hasType(v, "inventory") then attachedInventories[#attachedInventories+1] = v
-    elseif peripheral.hasType(v, "modem") then getAttachedInventoriesToModem(v) end
+    return attachedInventories
   end
   print("Your storage inventory list is not setup. How would you like to set that up?")
   print("1) All inventories on the network")
@@ -63,11 +58,11 @@ setup = function(moduleConfig)
   while true do
     local _, char = os.pullEvent("char")
     if char == "1" then
-      moduleConfig.inventories.value = attachedInventories
+      moduleConfig.inventories.value = getAttachedInventories()
       return
     elseif char == "2" then
       moduleConfig.inventories.value = {}
-      for k,v in pairs(attachedInventories) do
+      for k,v in pairs(getAttachedInventories()) do
         term.write(("%s(Y/n):"):format(v))
         local input = io.read()
         if input == "" then
