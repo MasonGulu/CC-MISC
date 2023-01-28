@@ -407,7 +407,9 @@ function abstractInventory(inventories, assumeLimits)
             else
               local item = call(inventoryName, "getItemDetail", i)
               cacheItem(item, inventoryName, i)
-              deepItemLUT[item.name][item.nbt or "NONE"] = item
+              if item then
+                deepItemLUT[item.name][item.nbt or "NONE"] = item
+              end
             end
           end
         end
