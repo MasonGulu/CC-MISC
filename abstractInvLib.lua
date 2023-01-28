@@ -561,7 +561,7 @@ function abstractInventory(inventories, assumeLimits)
 
 
   local function pullItemsOptimal(fromInventory, fromSlot, amount, toSlot, nbt, options)
-    if type(fromInventory) == "string" then
+    if type(fromInventory) == "string" or not fromInventory.abstractInventory then
       fromInventory = abstractInventory({fromInventory})
       fromInventory.refreshStorage()
     end
@@ -607,7 +607,7 @@ function abstractInventory(inventories, assumeLimits)
   end
 
   local function pushItemsOptimal(targetInventory, name, amount, toSlot, nbt, options)
-    if type(targetInventory) == "string" then
+    if type(targetInventory) == "string" or not targetInventory.abstractInventory then
       -- We'll see if this is a good optimization or not
       targetInventory = abstractInventory({targetInventory})
       targetInventory.refreshStorage()
