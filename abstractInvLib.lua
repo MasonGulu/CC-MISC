@@ -207,8 +207,10 @@ end
 ---@field globalSlot number Global slot of this CachedItem, spans across all wrapped inventories
 ---@field capacity number
 
+---@alias invPeripheral {list: function, pullItems: function, pushItems: function, getItemLimit: function, getItemDetail: function, size: function}
+
 ---Wrap inventories and create an abstractInventory
----@param inventories table<integer,string|{name: string, minSlot: integer?, maxSlot: integer?, slots: integer[]?}> Table of inventory peripheral names to wrap
+---@param inventories table<integer,string|table|{name: string|table, minSlot: integer?, maxSlot: integer?, slots: integer[]?}> Table of inventory peripheral names to wrap
 ---@param assumeLimits nil|boolean Default true, assume the limit of each slot is the same, saves a TON of time
 ---@return AbstractInventory
 function abstractInventory(inventories, assumeLimits)
