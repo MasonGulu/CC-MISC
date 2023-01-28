@@ -210,7 +210,7 @@ end
 ---@alias invPeripheral {list: function, pullItems: function, pushItems: function, getItemLimit: function, getItemDetail: function, size: function}
 
 ---Wrap inventories and create an abstractInventory
----@param inventories table<integer,string|table|{name: string|table, minSlot: integer?, maxSlot: integer?, slots: integer[]?}> Table of inventory peripheral names to wrap
+---@param inventories table<integer,string|invPeripheral|{name: string|invPeripheral, minSlot: integer?, maxSlot: integer?, slots: integer[]?}> Table of inventory peripheral names to wrap
 ---@param assumeLimits nil|boolean Default true, assume the limit of each slot is the same, saves a TON of time
 ---@return AbstractInventory
 function abstractInventory(inventories, assumeLimits)
@@ -272,7 +272,7 @@ function abstractInventory(inventories, assumeLimits)
   ---Cache a given item, ensuring that whatever was in the slot beforehand is wiped properly
   ---And the caches are managed correctly.
   ---@param item table|nil
-  ---@param inventory string|table
+  ---@param inventory string|invPeripheral
   ---@param slot number
   ---@return CachedItem
   local function cacheItem(item, inventory, slot)
@@ -939,7 +939,7 @@ function abstractInventory(inventories, assumeLimits)
   end
 
   ---Add an inventory to the storage object
-  ---@param inventory string|table
+  ---@param inventory string|invPeripheral
   ---@return boolean success
   function api.addInventory(inventory)
     expect(1,inventory,"string","table")
@@ -952,7 +952,7 @@ function abstractInventory(inventories, assumeLimits)
   end
 
   ---Remove an inventory from the storage object
-  ---@param inventory string|table
+  ---@param inventory string|invPeripheral
   ---@return boolean success
   function api.removeInventory(inventory)
     expect(1,inventory,"string", "table")
