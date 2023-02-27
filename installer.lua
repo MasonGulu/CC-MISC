@@ -69,7 +69,8 @@ local monitorInstall = {
 local clientInstallOptions = {
   name = "Client installation options",
   t = terminalInstall,
-  c = crafterInstall
+  c = crafterInstall,
+  m = monitorInstall,
 }
 
 local installOptions = {
