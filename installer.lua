@@ -132,7 +132,7 @@ local function downloadFile(path, url)
     writeFile = alwaysOverwrite or i ~= "n"
   end
   if writeFile then
-    local f = assert(fs.open(path, "w"), "Cannot open file "..path)
+    local f = assert(fs.open(path, "wb"), "Cannot open file "..path)
     f.write(response.readAll())
     f.close()
   end
