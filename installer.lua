@@ -4,20 +4,32 @@ if ({...})[1] == "dev" then
   repositoryUrl = "https://raw.githubusercontent.com/MasonGulu/CC-MISC/dev/"
 end
 
+local function fromURL(url)
+  return {url = url}
+end
+
+local function fromRepository(url)
+  return fromURL(repositoryUrl..url)
+end
+
 local fullInstall = {
   name = "Install MISC and all modules",
   files = {
-    ["startup.lua"] = "storage.lua",
-    ["abstractInvLib.lua"] = "abstractInvLib.lua", -- TODO change this
-    ["common.lua"] = "common.lua",
-    ["bfile.lua"] = "bfile.lua",
+    ["startup.lua"] = fromRepository "storage.lua",
+    ["abstractInvLib.lua"] = fromURL "https://gist.githubusercontent.com/MasonGulu/57ef0f52a93304a17a9eaea21f431de6/raw/07c3322a5fa0d628e558e19017295728e4ee2e8d/abstractInvLib.lua", -- TODO change this
+    ["common.lua"] = fromRepository "common.lua",
+    ["bfile.lua"] = fromRepository "bfile.lua",
     modules = {
-      ["inventory.lua"] = "modules/inventory.lua",
-      ["logger.lua"] = "modules/logger.lua",
-      ["interface.lua"] = "modules/interface.lua",
-      ["modem.lua"] = "modules/modem.lua",
-      ["crafting.lua"] = "modules/crafting.lua",
-      ["grid.lua"] = "modules/grid.lua",
+      ["inventory.lua"] = fromRepository "modules/inventory.lua",
+      ["logger.lua"] = fromRepository "modules/logger.lua",
+      ["interface.lua"] = fromRepository "modules/interface.lua",
+      ["modem.lua"] = fromRepository "modules/modem.lua",
+      ["crafting.lua"] = fromRepository "modules/crafting.lua",
+      ["grid.lua"] = fromRepository "modules/grid.lua",
+    },
+    recipes = {
+      ["grid_recipes.bin"] = fromRepository "recipes/grid_recipes.bin",
+      ["item_lookup.bin"] = fromRepository "recipes/item_lookup.bin"
     }
   }
 }
@@ -25,14 +37,14 @@ local fullInstall = {
 local minInstall = {
   name = "Install MISC and the minimal interface modules",
   files = {
-    ["startup.lua"] = "storage.lua",
-    ["abstractInvLib.lua"] = "abstractInvLib.lua", -- TODO change this
-    ["common.lua"] = "common.lua",
-    ["bfile.lua"] = "bfile.lua",
+    ["startup.lua"] = fromRepository "storage.lua",
+    ["abstractInvLib.lua"] = fromURL "https://gist.githubusercontent.com/MasonGulu/57ef0f52a93304a17a9eaea21f431de6/raw/07c3322a5fa0d628e558e19017295728e4ee2e8d/abstractInvLib.lua", -- TODO change this
+    ["common.lua"] = fromRepository "common.lua",
+    ["bfile.lua"] = fromRepository "bfile.lua",
     modules = {
-      ["inventory.lua"] = "modules/inventory.lua",
-      ["interface.lua"] = "modules/interface.lua",
-      ["modem.lua"] = "modules/modem.lua",
+      ["inventory.lua"] = fromRepository "modules/inventory.lua",
+      ["interface.lua"] = fromRepository "modules/interface.lua",
+      ["modem.lua"] = fromRepository "modules/modem.lua",
     }
   }
 }
@@ -46,23 +58,23 @@ local serverInstallOptions = {
 local terminalInstall = {
   name = "Install a basic item access terminal on a turtle",
   files = {
-    ["startup.lua"] = "clients/terminal.lua",
-    ["modemLib.lua"] = "clients/modemLib.lua"
+    ["startup.lua"] = fromRepository "clients/terminal.lua",
+    ["modemLib.lua"] = fromRepository "clients/modemLib.lua"
   }
 }
 
 local crafterInstall = {
   name = "Install an autocrafting terminal on a crafty turtle",
   files = {
-    ["startup.lua"] = "clients/crafter.lua"
+    ["startup.lua"] = fromRepository "clients/crafter.lua"
   }
 }
 
 local monitorInstall = {
   name = "Install a basic usage monitor",
   files = {
-    ["startup.lua"] = "clients/usageMonitor.lua",
-    ["modemLib.lua"] = "clients/modemLib.lua"
+    ["startup.lua"] = fromRepository "clients/usageMonitor.lua",
+    ["modemLib.lua"] = fromRepository "clients/modemLib.lua"
   }
 }
 
@@ -130,11 +142,11 @@ end
 local function downloadFiles(folder, files)
   for k,v in pairs(files) do
     local path = fs.combine(folder, k)
-    if type(v) == "table" then
+    if v.url then
+      downloadFile(path,v.url)
+    else
       fs.makeDir(path)
       downloadFiles(path,v)
-    else
-      downloadFile(path,repositoryUrl..v)
     end
   end
 end
