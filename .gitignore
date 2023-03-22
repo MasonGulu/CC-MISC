@@ -3,6 +3,7 @@
 log.txt
 config.txt
 basalt.lua
+abstractInvLib.lua
 
 # Jekyll junk files
 .jekyll-metadata
