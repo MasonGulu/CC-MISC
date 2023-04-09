@@ -910,7 +910,6 @@ function abstractInventory(inventories, assumeLimits, logSettings)
       end
     end
     batchExecute(schedule)
-    require"cc.pretty".pretty_print(defraggableLUT)
   end
 
   ---Get a CachedItem by name/nbt
