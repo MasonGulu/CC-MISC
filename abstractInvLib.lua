@@ -42,13 +42,17 @@ end
 
 ---Execute a table of functions in batches
 ---@param func function[]
-local function batchExecute(func)
-  local batches = math.ceil(#func / executeLimit)
+---@param skipPartial? boolean Only do complete batches and skip the remainder.
+---@return function[] skipped Functions that were skipped as they didn't fit.
+local function batchExecute(func, skipPartial)
+  local batches = #func / executeLimit
+  batches = skipPartial and math.floor(batches) or math.ceil(batches)
   for batch = 1, batches do
     local start = ((batch - 1) * executeLimit) + 1
     local batch_end = math.min(start + executeLimit - 1, #func)
     parallel.waitForAll(table.unpack(func, start, batch_end))
   end
+  return table.pack(table.unpack(func, 1 + executeLimit * batches))
 end
 
 ---Safely call an inventory "peripheral"
@@ -290,9 +294,14 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   local itemNameNBTLUT = {}
   -- [item.name][nbt][CachedItem] -> CachedItem
 
-  ---@type table<string,table<string,CachedItem>>
+  ---@type table<string,table<string,table<CachedItem,CachedItem>>>
   local itemSpaceLUT = {}
   -- [item.name][nbt][CachedItem] -> CachedItem
+
+  ---Keeps track of items that have at least 2 entries to itemSpaceLUT.
+  ---@type table<string,table<string,number>>
+  local defraggableLUT = {}
+  -- [ite.name][nbt] -> number
 
   ---@type table<string,table<integer,CachedItem>>
   local inventorySlotLUT = {}
@@ -365,6 +374,17 @@ function abstractInventory(inventories, assumeLimits, logSettings)
         end
         if itemSpaceLUT[oldItem.name] and itemSpaceLUT[oldItem.name][oldNBT] then
           itemSpaceLUT[oldItem.name][oldNBT][oldCache] = nil
+          if defraggableLUT[oldItem.name] and defraggableLUT[oldItem.name][oldNBT] then
+            local newSpaces = defraggableLUT[oldItem.name][oldNBT] - 1
+            if newSpaces >= 2 then
+              defraggableLUT[oldItem.name][oldNBT] = newSpaces
+            else
+              defraggableLUT[oldItem.name][oldNBT] = nil
+              if not next(defraggableLUT[oldItem.name]) then
+                defraggableLUT[oldItem.name] = nil
+              end
+            end
+          end
         end
       end
     end
@@ -406,6 +426,10 @@ function abstractInventory(inventories, assumeLimits, logSettings)
         -- There's space left in this slot, add it to the cache
         itemSpaceLUT[item.name] = itemSpaceLUT[item.name] or {}
         itemSpaceLUT[item.name][nbt] = itemSpaceLUT[item.name][nbt] or {}
+        defraggableLUT[item.name] = defraggableLUT[item.name] or {}
+        if next(itemSpaceLUT[item.name][nbt]) then
+          defraggableLUT[item.name][nbt] = (defraggableLUT[item.name][nbt] or 1) + 1
+        end
         itemSpaceLUT[item.name][nbt][cachedItem] = cachedItem
       end
     else
@@ -855,39 +879,37 @@ function abstractInventory(inventories, assumeLimits, logSettings)
 
   ---Rearrange items to make the most efficient use of space
   function api.defrag()
-    local f = {}
-    for _, name in pairs(api.listNames()) do
-      local nbt = "NONE"
-      table.insert(f,function()
-        local optimal = false
-        while not optimal do
-          local item = getSlotWithSpace(name, nbt)
-          if not item then
-            optimal = true
-            break
-          end
-          local count = item.item.count
-          cacheItem(nil, item.inventory, item.slot)
-          while count > 0 do
-            local toItem = getSlotWithSpace(name, nbt)
-            if toItem then
-              local toMove = math.min(count, (toItem.item.maxCount or toItem.capacity) - toItem.item.count)
-              toItem.item.count = toItem.item.count + toMove
-              cacheItem(toItem, toItem.inventory, toItem.slot)
-              call(item.inventory, "pushItems", toItem.inventory, item.slot, toMove, toItem.slot)
-              refreshItem(item)
-              refreshItem(toItem)
-              count = count - toMove
-            else
-              optimal = true
-              break
-            end
-          end
+    local schedule = {}
+    for name, nbts in pairs(defraggableLUT) do
+      for nbt in pairs(nbts) do
+        ---@type {item: CachedItem, free: number, amt: number}[]
+        local pad = {}
+        for item in pairs(itemSpaceLUT[name][nbt]) do
+          pad[#pad + 1] = {
+            item = item,
+            free = item.item.maxCount - item.item.count,
+            amt = item.item.count,
+          }
         end
-      end)
+        local i, j = 1, #pad
+        while i < j do
+          local item = pad[j].item
+          local toItem = pad[i].item
+          local toMove = math.min(pad[i].free, pad[j].amt)
+          schedule[#schedule + 1] = function()
+            call(item.inventory, "pushItems", toItem.inventory, item.slot, toMove, toItem.slot)
+            refreshItem(item)
+            refreshItem(toItem)
+          end
+          pad[i].free = pad[i].free - toMove
+          pad[j].amt = pad[j].amt - toMove
+          if pad[i].free == 0 then i = i + 1 end
+          if pad[j].amt == 0 then j = j - 1 end
+        end
+        schedule = batchExecute(schedule, true)
+      end
     end
-    batchExecute(f)
-    api.refreshStorage(true) -- this messes with the cache in some way I currently cannot figure out.
+    batchExecute(schedule)
   end
 
   ---Get a CachedItem by name/nbt
