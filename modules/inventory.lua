@@ -3,7 +3,7 @@ local common = require("common")
 ---@field interface modules.inventory.interface
 return {
 id = "inventory",
-version = "1.2.0",
+version = "1.2.1",
 config = {
   inventories = {
     type = "table",
@@ -93,7 +93,7 @@ init = function(loaded, config)
   local log = loaded.logger
   local storage = require("abstractInvLib")(config.inventory.inventories.value)
   storage.setBatchLimit(config.inventory.executeLimit.value)
-  local transferQueue = require("common").loadTableFromFile(".cache/transferQueue") --[[@as table|nil]] or {}
+  local transferQueue = {}
   local transferTimer
   local cacheTimer = os.startTimer(config.inventory.cacheTimer.value)
   local inventoryLock = false
@@ -148,7 +148,6 @@ init = function(loaded, config)
         logger:debug("Transfer %s %s finished, returned %s", transfer[1], transfer[2], retVal[2])
         os.queueEvent("inventoryFinished", transfer[1], table.unpack(retVal, 2))
       end
-      require("common").saveTableToFile(".cache/transferQueue", transferQueue)
       if config.inventory.defragEachTransfer.value then
         defrag()
       end
@@ -181,7 +180,6 @@ init = function(loaded, config)
     elseif not transferTimer then
       transferTimer = os.startTimer(config.inventory.flushTimer.value)
     end
-    require("common").saveTableToFile(".cache/transferQueue", transferQueue)
   end
 
   ---Generate a pseudo random ID
