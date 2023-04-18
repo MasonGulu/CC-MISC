@@ -3,7 +3,7 @@ local common = require("common")
 ---@field interface modules.inventory.interface
 return {
 id = "inventory",
-version = "1.1.3",
+version = "1.2.0",
 config = {
   inventories = {
     type = "table",
@@ -43,7 +43,9 @@ config = {
 dependencies = {
   logger = {min="1.1",optional=true},
 },
+---@param moduleConfig table
 setup = function(moduleConfig)
+  ---@return string[]
   local function getAttachedInventories()
     local attachedInventories = {}
     for _, v in ipairs(peripheral.getNames()) do
@@ -69,7 +71,7 @@ setup = function(moduleConfig)
           input = "y"
         end
         if input:sub(1,1):lower() == "y" then
-          table.insert(moduleConfig.inventories.value, v)
+          table.insert(moduleConfig.inventories.value --[[@as table]], v)
         end
       end
       return
@@ -91,7 +93,7 @@ init = function(loaded, config)
   local log = loaded.logger
   local storage = require("abstractInvLib")(config.inventory.inventories.value)
   storage.setBatchLimit(config.inventory.executeLimit.value)
-  local transferQueue = require("common").loadTableFromFile(".cache/transferQueue") or {}
+  local transferQueue = require("common").loadTableFromFile(".cache/transferQueue") --[[@as table|nil]] or {}
   local transferTimer
   local cacheTimer = os.startTimer(config.inventory.cacheTimer.value)
   local inventoryLock = false
@@ -215,11 +217,11 @@ init = function(loaded, config)
   ---@param options nil|TransferOptions
   ---@return integer|string count event name in case of async
   local function pushItems(async, targetInventory, name, amount, toSlot, nbt, options)
-    local id = queueAction("pushItems", targetInventory, name, amount, toSlot, nbt, options)
     if async then
-      return id
+      return queueAction("pushItems", targetInventory, name, amount, toSlot, nbt, options)
     end
-    return table.unpack(waitForTransfer(id),3)
+    performTransfer()
+    return storage.pushItems(targetInventory, name, amount, toSlot, nbt, options)
   end
 
   ---Pull items from an inventory
@@ -232,11 +234,11 @@ init = function(loaded, config)
   ---@param options nil|TransferOptions
   ---@return integer|string count event name in case of async
   local function pullItems(async, fromInventory, fromSlot, amount, toSlot, nbt, options)
-    local id = queueAction("pullItems", fromInventory, fromSlot, amount, toSlot, nbt, options)
     if async then
-      return id
+      return queueAction("pullItems", fromInventory, fromSlot, amount, toSlot, nbt, options)
     end
-    return table.unpack(waitForTransfer(id),3)
+    performTransfer()
+    return storage.pullItems(fromInventory, fromSlot, amount, toSlot, nbt, options)
   end
 
   if config.inventory.defragOnStart.value then

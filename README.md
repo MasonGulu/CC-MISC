@@ -18,6 +18,10 @@ A minimal MISC system consists of
 * Any number of connected inventories
 * (Optionally) A client access terminal
 
+To install MISC, you can simply run the installer on your server and each client you'd like to use. 
+
+`wget run https://raw.githubusercontent.com/MasonGulu/CC-MISC/master/installer.lua`.
+
 Functionality can be extended by attaching more devices to the network, and adding appropriate modules.
 For example, grid crafting functionality can be added by adding the following modules.
 * Crafting planner and executor `/modules/crafting.lua`

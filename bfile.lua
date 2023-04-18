@@ -285,7 +285,7 @@ end
 ---Add a datatype to the struct
 ---@param self Struct
 ---@param datatype string
----@param key any
+---@param key string|integer
 ---@return Struct
 local function add(self,datatype,key)
   local reader, writer = getReaderWriter(datatype)
@@ -392,7 +392,9 @@ local function writeHandle(self,handle,t)
     if v.key == "^" then
       valueToWrite = t
     end
-    assert(valueToWrite, "No value at key="..v.key)
+    if v.key then
+      assert(valueToWrite, "No value at key="..v.key)
+    end
     if v.mode == "data" then
       v.writer(handle,valueToWrite)
     elseif v.mode == "constant" then

@@ -190,6 +190,7 @@ init = function(loaded,config)
       shapeIndicator = f.read(1)
     end
     updateCraftableList()
+    f.close()
   end
 
 

@@ -1,0 +1,15 @@
+<frame width="parent.w" height="1" x="1" y="1">
+    <!-- top bar -->
+    <button x="1" y="1" height="1" width="10" text="Hello world"/>
+</frame>
+<frame width="parent.w" height="parent.h-2" x="1" y="2">
+    <!-- list area -->
+    <label text="Count | Name" x="1" y="1" width="parent.w" height="1" id="itemList"/>
+    <list x="1" y="2" height="parent.h-1" width="parent.w"/>
+</frame>
+<frame width="parent.w" height="1" x="1" y="parent.h">
+    <!-- bottom bar -->
+    <input x="1" y="1" width="parent.w-5" height="1" id="search"/>
+    <input x="parent.w-5" y="1" width="5" height="1" type="number" id="count"/>
+    <button x="parent.w" y="1" width="1" height="1" text="I" id="mode"/>
+</frame>

@@ -3,7 +3,7 @@ local common = require("common")
 ---@field interface modules.crafting.interface
 return {
 id = "crafting",
-version = "1.3.3",
+version = "1.4.0",
 config = {
   tagLookup = {
     type="table",
@@ -77,9 +77,6 @@ init = function(loaded, config)
   local function getOrCacheString(str, tag)
     common.enforceType(str,1,"string")
     common.enforceType(tag,2,"boolean","nil")
-    if not str then
-      error("",2)
-    end
     if itemNameLookup[str] then
       return itemNameLookup[str]
     end
@@ -238,7 +235,7 @@ init = function(loaded, config)
   ---@return string
   local function id()
     lastId = lastId + 1
-    local genId = os.epoch("utc").."$"..lastId
+    local genId = lastId .. "$"
     return genId
   end
 
@@ -371,6 +368,16 @@ init = function(loaded, config)
       return selectBestFromIndex(item)
     end
     error("Invalid type "..type(item),2)
+  end
+
+  ---Get the string for a given index
+  ---@param v integer
+  ---@return string string
+  ---@return boolean tag
+  local function getString(v)
+    local itemInfo = itemLookup[v]
+    assert(itemInfo, "Invalid key passed to getString")
+    return itemInfo[1], itemInfo.tag
   end
 
   ---Merge from into the end of to
@@ -527,7 +534,9 @@ init = function(loaded, config)
     end
     if not success then
       craftLogger:debug("No recipe found for %s", name)
-      node = createMissingNode(name, remaining, jobId)
+      for k,v in pairs(createMissingNode(name, remaining, jobId)) do
+        node[k] = v
+      end
     end
     return remaining - node.count
   end
@@ -767,10 +776,10 @@ init = function(loaded, config)
         changeNodeState(node, "READY")
       end
     elseif node.state == "READY" then
-      assert(readyHandlers[node.type], "No readyHandler for type "..node.type)
+      assert(readyHandlers[node.type], "No readyHandler for type "..(node.type or "nil"))
       readyHandlers[node.type](node)
     elseif node.state == "CRAFTING" then
-      assert(craftingHandlers[node.type], "No craftingHandler for type "..node.type)
+      assert(craftingHandlers[node.type], "No craftingHandler for type "..(node.type or "nil"))
       craftingHandlers[node.type](node)
     elseif node.state == "DONE" and node.children then
       deleteNodeChildren(node)
@@ -809,6 +818,9 @@ init = function(loaded, config)
       elseif task.state == "READY" then
         removeFromArray(readyQueue, task)
         removeChildrensParents(task)
+      end
+      if task.type == "ITEM" then
+        deallocateItems(task.name, task.count, task.taskId)
       end
       -- if it's not in these two states, then it's not cancellable
       return
@@ -1091,6 +1103,7 @@ init = function(loaded, config)
       addJsonTypeHandler = addJsonTypeHandler,
       addCraftableList = addCraftableList,
       createMissingNode = createMissingNode,
+      getString = getString
     }
   }
 end
