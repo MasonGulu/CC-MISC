@@ -1,0 +1,129 @@
+-- Sever library for interacting with clients using https://github.com/SkyTheCodeMaster/cc-websocket-bridge
+
+---@class modules.websocket
+---@field interface modules.websocket.interface
+return {
+id = "websocket",
+version = "1.0.0",
+config = {
+  url = {
+    type = "string",
+    description = "URL to connect over",
+  },
+  introspection = {
+    type = "table",
+    description = "table<string,string> of player names to introspection peripheral names",
+    default = {["ShreksHellraiser"] = "manipulator_0"}
+  }
+},
+dependencies = {
+  logger = {min="1.1",optional=true},
+  interface = {min="1.1"}
+},
+init = function(loaded, config)
+  local log = loaded.logger
+  local logger = setmetatable({}, {__index=function () return function () end end})
+  local introspection = {}
+  for k,v in pairs(config.websocket.introspection.value) do
+    introspection[k] = peripheral.call(v, "getInventory")
+  end
+
+  if log then
+    logger = log.interface.logger("modem","main")
+  end
+  local interface = {}
+  local ws = assert(http.websocket(config.websocket.url.value)) --[[@as Websocket]]
+
+  local function handleUpdate(list)
+    ws.send(textutils.serialise{
+      list = list,
+      protocol = "storage_system_update",
+      destination = "*",
+      source = "HOST",
+    })
+  end
+  loaded.interface.interface.addInventoryUpdateHandler(handleUpdate)
+
+  local function validateMessage(message)
+    local valid = type(message) == "table" and message.protocol ~= nil
+    valid = valid and (message.destination == "HOST")
+    valid = valid and message.source ~= nil
+    return valid
+  end
+  local function getWebsocketMessage(filter, timeout)
+    local timer
+    if timeout then
+        timer = os.startTimer(timeout)
+    end
+    while true do
+      ---@type string, string, integer, integer, any, integer
+      local event, id, message = os.pullEvent()
+      if event == "websocket_message" then
+        ---@diagnostic disable-next-line: cast-local-type
+        message = textutils.unserialise(message --[[@as string]]) --[[@as table]]
+        if (filter == nil or filter(message)) then
+          if timeout then
+            os.cancelTimer(timer)
+          end
+          return {
+            message = message,
+          }
+        end
+      elseif event == "timer" and timeout and id == timer then
+        return
+      end
+    end
+  end
+
+  local function handleMessage(event)
+    local message = event.message
+    if message.method == "pushItems" or message.method == "pullItems" then
+      local periphName = config.websocket.introspection.value[message.args[2]]
+      local periph = peripheral.wrap(periphName or message.args[2])
+      if periphName and periph and periph.getInventory then
+        message.args[2] = periph.getInventory()
+        message.args[7] = message.args[7] or {}
+        message.args[7].optimal = false
+        message.args.n = 7
+      end
+    end
+    local response = table.pack(loaded.interface.interface.callMethod(message.method, message.args))
+    ws.send(textutils.serialise{
+      destination = message.source,
+      protocol = "storage_system_websocket",
+      response = response,
+      method = message.method,
+      source = "HOST",
+    })
+  end
+
+  local function callIntrospection(event)
+    local message = event.message
+    local periph = introspection[message.player]
+    local response = table.pack(periph[message.method](table.unpack(message.args, 1, message.args.n)))
+    ws.send(textutils.serialise{
+      destination = message.source,
+      protocol = "call_introspection",
+      response = response,
+      method = message.method,
+      source = "HOST"
+    })
+  end
+
+  interface.start = function()
+    while true do
+      local event = getWebsocketMessage(validateMessage)
+      assert(event, "Got no message??")
+      local message = event.message
+      if message.protocol == "storage_system_websocket" and message.method and message.args then
+        handleMessage(event)
+      elseif message.protocol == "call_introspection" and message.method and message.args and message.player
+      and config.websocket.introspection.value[message.player] then
+        callIntrospection(event)
+      end
+    end
+  end
+  ---@class modules.websocket.interface
+  return interface
+end
+}

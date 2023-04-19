@@ -1,7 +1,13 @@
 -- storage terminal turtle for the system
-local turtleInventory = {}
-local lib = require("modemLib")
+local lib
+
+local wirelessMode = not turtle
+local turtleMode = turtle
+local inventory, invPeripheral, importStart, importEnd, pollFrequency, exportStart, exportEnd
+local player = "ShreksHellraiser"
+
 local function refreshTurtleInventory()
+    local turtleInventory = {}
     local f = {}
     for i = 1, 16 do
         f[i] = function()
@@ -12,11 +18,90 @@ local function refreshTurtleInventory()
     return turtleInventory
 end
 
-local modem = peripheral.getName(peripheral.find("modem"))
-lib.connect(modem)
-local selfName = peripheral.call(modem, "getNameLocal")
+local function firstTimeSetup()
+    settings.define("misc.turtle", {description = "Should this terminal be in turtle mode?", type="boolean"})
+    settings.define("misc.websocketURL", {description="URL of the websocket to use for wireless communication", type="string"})
+    settings.define("misc.wireless", {description="Should this terminal be in wireless mode? (Use websocket + introspection module)", type="boolean"})
+    settings.define("misc.importStart", {description="Overwrite the default starting import slot", type="number"})
+    settings.define("misc.importEnd", {description="Overwrite the default ending import slot", type="number"})
+    settings.define("misc.exportStart", {description="Overwrite the default starting export slot", type="number"})
+    settings.define("misc.exportEnd", {description="Overwrite the default ending export slot", type="number"})
+    settings.define("misc.player", {description="Player to use for wireless mode", type="string"})
+    settings.define("misc.inventory", {description="Inventory to use when not wireless, and not a turtle", type="string"})
 
-local importDivide = 4
+    settings.set("misc.turtle", not not (turtle))
+    if settings.get("misc.turtle") then
+        print("Assuming turtle mode..")
+        sleep(1)
+        return
+    end
+    print("Should this operate in wireless mode?")
+    print("Wireless mode would be for introspection module use.")
+    print("Otherwise, this will act as an item terminal with a redirectable i/o inventory.")
+    print("y/n? ")
+    local choice
+    while choice ~= 'y' and choice ~= 'n' do
+        choice = read()
+    end
+    wirelessMode = choice == 'y'
+    settings.set("misc.wireless", wirelessMode)
+    if wirelessMode then
+        print("Enter the URL of the websocket relay service you would like to use.")
+        settings.set("misc.websocketURL", read())
+        print("Enter the player name")
+        settings.set("misc.player", read())
+    else
+        print("Enter the name of the I/O inventory peripheral")
+        settings.set("misc.inventory", read())
+    end
+    settings.save()
+end
+
+settings.load()
+if settings.get("misc.turtle") == nil then
+    firstTimeSetup()
+end
+
+turtleMode = settings.get("misc.turtle")
+wirelessMode = settings.get("misc.wireless")
+player = settings.get("misc.player")
+local websocketURL = settings.get("misc.websocketURL")
+inventory = settings.get("misc.inventory")
+
+if wirelessMode then
+    lib = require("websocketLib")
+    lib.connect(websocketURL)
+else
+    lib = require("modemLib")
+    local modem = peripheral.getName(peripheral.find("modem"))
+    lib.connect(modem)
+    if turtleMode then
+        inventory = peripheral.call(modem, "getNameLocal")
+        invPeripheral = turtle
+        invPeripheral.list = refreshTurtleInventory
+        importStart = settings.get("misc.importStart") or 1
+        importEnd = settings.get("misc.importEnd") or 8
+        exportStart = settings.get("misc.exportStart") or 9
+        exportEnd = settings.get("misc.exportEnd") or 16
+    end
+end
+if not turtleMode then
+    if wirelessMode then
+        importStart = settings.get("misc.importStart") or 19
+        importEnd = settings.get("misc.importEnd") or 19
+        exportStart = settings.get("misc.exportStart") or 20
+        exportEnd = settings.get("misc.exportEnd") or 27
+        inventory = player
+    else
+        invPeripheral = peripheral.wrap(inventory) --[[@as Inventory]]
+        local size = invPeripheral.size()
+        importStart = settings.get("misc.importStart") or 1
+        importEnd = settings.get("misc.importEnd") or math.floor(size / 2)
+        exportStart = settings.get("misc.exportStart") or importStart + 1
+        exportEnd = settings.get("misc.exportEnd") or size
+    end
+    pollFrequency = 3
+end
 
 ---@type "SEARCH"|"INFO"|"CRAFT"
 local mode = "SEARCH"
@@ -24,13 +109,32 @@ local mode = "SEARCH"
 local function eventTurtleInventory()
     while true do
         os.pullEvent("turtle_inventory")
-        refreshTurtleInventory()
-        for i = 1,importDivide do
-            if turtleInventory[i] then
-                lib.pullItems(true, selfName, i, nil, nil, nil, {optimal=false})
+        for i = importStart, importEnd do
+            if turtle.getItemDetail(i) then
+                lib.pullItems(true, inventory, i, nil, nil, nil, {optimal=false})
             end
         end
         lib.performTransfer()
+    end
+end
+
+local function inventoryPoll()
+    local slotActive = false
+    local slotActiveTicks = 0
+    while true do
+        sleep((slotActive and pollFrequency / 3) or pollFrequency)
+        slotActiveTicks = slotActiveTicks + 1
+        if slotActiveTicks > 5 then
+            slotActive = false
+        end
+        local listing = (wirelessMode and lib.callIntrospection(player, "list")) or invPeripheral.list()
+        for i = importStart, importEnd do
+            if listing[i] then
+                slotActive = true
+                slotActiveTicks = 0
+                lib.pullItems(true, inventory, i, nil, nil, nil, {optimal=false})
+            end
+        end
     end
 end
 
@@ -144,19 +248,15 @@ local function requestItem(requestingCraft,item,amount)
         return
     end
     amount = math.min(amount, item.count)
-    local stacks = math.min(math.ceil(amount / item.maxCount),16)
-    local freeSlots = {}
-    for i = importDivide+1, 16 do
-        freeSlots[i] = true
-    end
-    for i,_ in pairs(turtleInventory) do
-        freeSlots[i] = nil
-    end
-    for i = 1, stacks do
-        local slot = next(freeSlots)
-        if not slot then break end -- not enough space in the turtle to fit all of the items
-        freeSlots[slot] = nil
-        lib.pushItems(true,selfName,item.name,amount,slot,item.nbt)
+    local listing = (wirelessMode and lib.callIntrospection(player, "list")) or invPeripheral.list()
+    for i = exportStart, exportEnd do
+        if not listing[i] then
+            lib.pushItems(true,inventory,item.name,amount,i,item.nbt, {optimal=false})
+            amount = amount - item.maxCount
+            if amount <= 0 then
+                break
+            end
+        end
     end
     lib.performTransfer()
 end
@@ -171,7 +271,7 @@ local SEARCH, CRAFT, INFO, REQUEST
 ---@param drawer fun(filter: string, selected: integer, sifted: any[])
 ---@param listProvider fun(): any[]
 ---@param onSelect fun(selected: any)
----@param event nil|fun(e: any[])
+---@param event nil|fun(e: any[]): boolean?
 ---@param sort nil|fun(a: any, b: any): boolean
 ---@param match nil|fun(val: any, pattern: string): boolean
 ---@param tab function mode to switch to upon pushing tab
@@ -183,7 +283,9 @@ local function searchableMenu(drawer, listProvider, onSelect, event, sort, match
         draw(drawer, filter, selected, sifted)
         local e = {os.pullEvent()}
         if event then
-            event(e)
+            if event(e) then
+                sifted = filterList(listProvider(), filter, sort, match)
+            end
         end
         if e[1] == "char" then
             filter = filter .. e[2]
@@ -242,6 +344,7 @@ function SEARCH()
     local event = function (e)
         if e[1] == "update" then
             list = e[2]
+            return true
         end
     end
 
@@ -398,4 +501,8 @@ function REQUEST(item)
     end
 end
 
-parallel.waitForAll(lib.subscribe, eventTurtleInventory, SEARCH)
+if turtleMode then
+    parallel.waitForAll(lib.subscribe, eventTurtleInventory, SEARCH)
+else
+    parallel.waitForAll(lib.subscribe, inventoryPoll, SEARCH)
+end

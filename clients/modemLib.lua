@@ -40,6 +40,7 @@ local function getModemMessage(filter, timeout)
   end
 end
 ---Connect to the storage system
+---@param modem_name string
 function lib.connect(modem_name)
   modem = assert(peripheral.wrap(modem_name), "Invalid modem.")
   modem.open(respPort)
