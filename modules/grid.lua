@@ -3,7 +3,7 @@ local common = require("common")
 ---@class modules.grid
 return {
 id = "grid",
-version = "1.1.4",
+version = "1.1.5",
 config = {
   modem = {
     type = "string",
@@ -144,7 +144,8 @@ init = function(loaded,config)
       gridRecipe.width = 3
       gridRecipe.height = 3
     else
-      for k,v in ipairs(recipe) do
+      gridRecipe.length = #recipe
+      for _,v in ipairs(recipe) do
         table.insert(gridRecipe.recipe, crafting.getOrCacheString(v))
       end
     end

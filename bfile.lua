@@ -516,13 +516,11 @@ local START_DATA = {
 
 local t0
 local function serialize(T)
-  print("serialize")
   local isRoot = false
   if not t0 then
     isRoot = true
     t0 = os.epoch("utc")
   elseif os.epoch("utc") - t0 > 3000 then
-    print("yeilding")
     t0 = os.epoch("utc")
     sleep()
   end
@@ -588,7 +586,6 @@ local function unserialize(s)
     t0 = os.epoch("utc")
     isRoot = true
   elseif os.epoch("utc") - t0 > 3000 then
-    print("yeilding")
     t0 = os.epoch("utc")
     sleep()
   end
