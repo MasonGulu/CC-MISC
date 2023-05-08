@@ -20,7 +20,7 @@ If we want to write this struct to a file now we should do something like the fo
 
 myStruct:writeFile("myStructFile.bin", {myValue=100})
 
-As you can see, the uint8 we are writing is at the index "myValue". 
+As you can see, the uint8 we are writing is at the index "myValue".
 You can use any type here (that can be used to index tables).
 
 Now this alone is a little usable, but what happens when you wanna store an array of objects?
@@ -45,24 +45,23 @@ There's no additional rules to that other than map<keytype,valuetype>. Yes you c
 
 If you need to unpack a type table so it's in the parent table, set the key to "^".
 ]]
-
 ---Create a rudamentary emulator of a file handle from a string.
 ---@return handle
 local function stringHandle(str)
   local pointer = 0
 
   local function limitPointer(modifier)
-    pointer = math.max(0,math.min(pointer + (modifier or 0), str:len()))
+    pointer = math.max(0, math.min(pointer + (modifier or 0), str:len()))
     return pointer
   end
 
   local handle = {}
 
   function handle.read(count)
-    local start = pointer+1
+    local start = pointer + 1
     local finish = limitPointer(count or 1)
-    local retStr = str:sub(start,finish)
-    if start-1 == finish then
+    local retStr = str:sub(start, finish)
+    if start - 1 == finish then
       -- end of string
       return
     end
@@ -93,9 +92,9 @@ local function stringHandle(str)
     if type(value) == "number" then
       value = string.char(value)
     end
-    local start = pointer+1
+    local start = pointer + 1
     pointer = pointer + value:len()
-    str = str:sub(1,start-1) .. value .. str:sub(pointer+1)
+    str = str:sub(1, start - 1) .. value .. str:sub(pointer + 1)
   end
 
   function handle.getString()
@@ -108,46 +107,46 @@ end
 local aliases = {}
 
 local structReaders = {
-  uint8 = function (f)
-    return select(1,string.unpack("I1",f.read(1)))
+  uint8 = function(f)
+    return select(1, string.unpack("I1", f.read(1)))
   end,
-  uint16 = function (f)
-    return select(1,string.unpack(">I2",f.read(2)))
+  uint16 = function(f)
+    return select(1, string.unpack(">I2", f.read(2)))
   end,
-  string = function (f)
+  string = function(f)
     local length = string.unpack(">I2", f.read(2))
     local str = f.read(length)
     return str
   end,
-  char = function (f)
+  char = function(f)
     return f.read(1)
   end,
-  uint32 = function (f)
-    return select(1, string.unpack(">I4",f.read(4)))
+  uint32 = function(f)
+    return select(1, string.unpack(">I4", f.read(4)))
   end,
-  number = function (f)
+  number = function(f)
     return select(1, string.unpack("n", f.read(8)))
   end
 }
 
 local structWriters = {
-  uint8 = function (f,value)
+  uint8 = function(f, value)
     f.write(string.pack("I1", value))
   end,
-  uint16 = function (f,value)
+  uint16 = function(f, value)
     f.write(string.pack(">I2", value))
   end,
-  string = function (f,value)
+  string = function(f, value)
     f.write(string.pack(">I2", value:len()))
     f.write(value)
   end,
-  char = function (f,value)
+  char = function(f, value)
     f.write(value)
   end,
-  uint32 = function (f,value)
+  uint32 = function(f, value)
     f.write(string.pack(">I4", value))
   end,
-  number = function (f, value)
+  number = function(f, value)
     f.write(string.pack("n", value))
   end
 }
@@ -167,7 +166,7 @@ local function arrayReaderGen(arrayDatatype, lengthDatatype, fixedLength)
       local t = {}
       while f.read(1) do
         f.seek(nil, -1)
-        t[#t+1] = dataReader(f)
+        t[#t + 1] = dataReader(f)
       end
       return t
     end
@@ -199,13 +198,13 @@ local function arrayWriterGen(arrayDatatype, lengthDatatype, fixedLength)
     _, lengthWriter = getReaderWriter(lengthDatatype)
   end
   local _, dataWriter = getReaderWriter(arrayDatatype)
-  return function(f,value)
+  return function(f, value)
     if lengthDatatype ~= "*" and not fixedLength then
       -- this has a defined length, without one we can't read it back unless it's the whole file.
-      lengthWriter(f,#value)
+      lengthWriter(f, #value)
     end
-    for _,v in ipairs(value) do
-      dataWriter(f,v)
+    for _, v in ipairs(value) do
+      dataWriter(f, v)
     end
   end
 end
@@ -231,9 +230,9 @@ end
 local function mapWriterGen(keyType, valueType)
   local _, keyWriter = getReaderWriter(keyType)
   local _, valueWriter = getReaderWriter(valueType)
-  return function(f,value)
+  return function(f, value)
     local start = true
-    for k,v in pairs(value) do
+    for k, v in pairs(value) do
       if not start then
         f.write(",")
       end
@@ -258,7 +257,7 @@ function getReaderWriter(datatype)
   local lengthDatatype = datatype:match("%[([%a%d*]-)%]$")
   local keyType, valueType = datatype:match("^map<([%S]+),([%S]+)>")
   if lengthDatatype then
-    local arrayDatatype = datatype:sub(1,-lengthDatatype:len()-3)
+    local arrayDatatype = datatype:sub(1, -lengthDatatype:len() - 3)
     local fixedLength
     if tonumber(lengthDatatype) then
       -- this is a number literal, this array is a fixed size
@@ -277,8 +276,8 @@ function getReaderWriter(datatype)
     reader = structReaders[datatype]
     writer = structWriters[datatype]
   end
-  assert(reader, "No reader for "..datatype)
-  assert(writer, "No writer for "..datatype)
+  assert(reader, "No reader for " .. datatype)
+  assert(writer, "No writer for " .. datatype)
   return reader, writer
 end
 
@@ -287,7 +286,7 @@ end
 ---@param datatype string
 ---@param key string|integer
 ---@return Struct
-local function add(self,datatype,key)
+local function add(self, datatype, key)
   local reader, writer = getReaderWriter(datatype)
   table.insert(self.structure, {
     type = datatype,
@@ -320,7 +319,7 @@ end
 ---@param key any
 ---@param loadCondition fun(ch: string): string datatype to load
 ---@param writeCondition fun(value: table): string, string character indicating condition, datatype to save
-local function conditional(self,key,loadCondition, writeCondition)
+local function conditional(self, key, loadCondition, writeCondition)
   table.insert(self.structure, {
     mode = "conditional",
     key = key,
@@ -333,9 +332,9 @@ end
 ---@param self Struct
 ---@param handle handle
 ---@return table
-local function readHandle(self,handle)
+local function readHandle(self, handle)
   local t = {}
-  for k,v in ipairs(self.structure) do
+  for k, v in ipairs(self.structure) do
     if v.mode == "data" then
       t[v.key] = v.reader(handle)
     elseif v.mode == "constant" then
@@ -346,12 +345,12 @@ local function readHandle(self,handle)
       local reader = getReaderWriter(datatype)
       t[v.key] = reader(handle)
     else
-      error("Invalid mode "..v.mode)
+      error("Invalid mode " .. v.mode)
     end
 
     if v.key == "^" then
       -- unpack this table onto the parent table
-      for k2,v2 in pairs(t[v.key]) do
+      for k2, v2 in pairs(t[v.key]) do
         t[k2] = v2
       end
       t[v.key] = nil
@@ -364,7 +363,7 @@ end
 ---@param self Struct
 ---@param filename string
 ---@return table|nil
-local function readFile(self,filename)
+local function readFile(self, filename)
   local f = fs.open(filename, "rb")
   if not f then
     return
@@ -378,7 +377,7 @@ end
 ---@param self Struct
 ---@param str string
 ---@return table
-local function readString(self,str)
+local function readString(self, str)
   return readHandle(self, stringHandle(str))
 end
 
@@ -386,17 +385,16 @@ end
 ---@param self Struct
 ---@param handle handle
 ---@param t table
-local function writeHandle(self,handle,t)
-  for k,v in ipairs(self.structure) do
+local function writeHandle(self, handle, t)
+  for k, v in ipairs(self.structure) do
     local valueToWrite = t[v.key]
     if v.key == "^" then
       valueToWrite = t
-    end
-    if v.key then
-      assert(valueToWrite, "No value at key="..v.key)
+    elseif v.key then
+      assert(valueToWrite ~= nil, "No value at key=" .. v.key)
     end
     if v.mode == "data" then
-      v.writer(handle,valueToWrite)
+      v.writer(handle, valueToWrite)
     elseif v.mode == "constant" then
       handle.write(v.value)
     elseif v.mode == "conditional" then
@@ -405,7 +403,7 @@ local function writeHandle(self,handle,t)
       local _, writer = getReaderWriter(datatype)
       writer(handle, valueToWrite)
     else
-      error("Invalid mode "..v.mode)
+      error("Invalid mode " .. v.mode)
     end
   end
 end
@@ -414,7 +412,7 @@ end
 ---@param self Struct
 ---@param filename string
 ---@param t table
-local function writeFile(self,filename,t)
+local function writeFile(self, filename, t)
   local f = assert(fs.open(filename, "wb"))
   writeHandle(self, f, t)
   f.close()
@@ -493,7 +491,7 @@ end
 
 local CONTROL = {
   START_STRING_KEY = "$", -- Strings are null terminated
-  START_INT_KEY = "#", -- Null terminated string representation to allow infinite indicies
+  START_INT_KEY = "#",    -- Null terminated string representation to allow infinite indicies
   END = "\25"
 }
 
@@ -528,37 +526,37 @@ local function serialize(T)
   local keyNum = 0
   for k, v in pairs(T) do
     if type(k) == "number" and k ~= keyNum + 1 then -- this is a numeric key, but not an implicit one
-      serializedT = serializedT..CONTROL.START_INT_KEY..tostring(k).."\0"
-    elseif type(k) == "string" then -- this is a string key
-      serializedT = serializedT..CONTROL.START_STRING_KEY..k.."\0"
+      serializedT = serializedT .. CONTROL.START_INT_KEY .. tostring(k) .. "\0"
+    elseif type(k) == "string" then                 -- this is a string key
+      serializedT = serializedT .. CONTROL.START_STRING_KEY .. k .. "\0"
     end
     keyNum = keyNum + 1
     local valueType = type(v)
-    assert(valueType ~= "function", "Cannot serialize function @ "..tostring(k))
+    assert(valueType ~= "function", "Cannot serialize function @ " .. tostring(k))
     if valueType == "number" then
       if math.floor(v) == v and v >= 0 and v <= 65535 then
         -- number is an int [0,65535]
         -- Store in big endian
-        serializedT = serializedT..START_DATA.int..string.char(bit.brshift(v,8), bit.band(v, 0xFF))
+        serializedT = serializedT .. START_DATA.int .. string.char(bit.brshift(v, 8), bit.band(v, 0xFF))
       else
-        serializedT = serializedT..START_DATA.number..tostring(v).."\0"
+        serializedT = serializedT .. START_DATA.number .. tostring(v) .. "\0"
       end
     elseif valueType == "boolean" then
       if valueType then
-        serializedT = serializedT..START_DATA.booleanTrue
+        serializedT = serializedT .. START_DATA.booleanTrue
       else
-        serializedT = serializedT..START_DATA.booleanFalse
+        serializedT = serializedT .. START_DATA.booleanFalse
       end
     elseif valueType == "table" then
-      serializedT = serializedT..START_DATA.table..serialize(v)
+      serializedT = serializedT .. START_DATA.table .. serialize(v)
     else -- the only (accepted) possibility left is that this is a string
-      serializedT = serializedT..START_DATA.string..v.."\0"
+      serializedT = serializedT .. START_DATA.string .. v .. "\0"
     end
   end
   if isRoot then
     t0 = nil
   end
-  return serializedT..CONTROL.END
+  return serializedT .. CONTROL.END
 end
 
 -- Return a string decoded from an input string
@@ -595,36 +593,36 @@ local function unserialize(s)
   while (s:sub(pointer, pointer) ~= CONTROL.END) and pointer < s:len() do
     local char = s:sub(pointer, pointer)
     if char == CONTROL.START_INT_KEY then
-      key, pointer = decodeString(s, pointer+1)
+      key, pointer = decodeString(s, pointer + 1)
       key = tonumber(key)
     elseif char == CONTROL.START_STRING_KEY then
-      key, pointer = decodeString(s, pointer+1)
+      key, pointer = decodeString(s, pointer + 1)
     else
       if char == START_DATA.booleanFalse then
-        T[key or #T+1] = false
+        T[key or #T + 1] = false
       elseif char == START_DATA.booleanTrue then
-        T[key or #T+1] = true
+        T[key or #T + 1] = true
       elseif char == START_DATA.string then
         local str = ""
-        str, pointer = decodeString(s, pointer+1)
-        T[key or #T+1] = str
+        str, pointer = decodeString(s, pointer + 1)
+        T[key or #T + 1] = str
       elseif char == START_DATA.number then
         local str = ""
-        str, pointer = decodeString(s, pointer+1)
-        T[key or #T+1] = tonumber(str)
+        str, pointer = decodeString(s, pointer + 1)
+        T[key or #T + 1] = tonumber(str)
       elseif char == START_DATA.table then
         local str = ""
         local pointer2 = 1
-        str, pointer2 = decodeString(s, pointer+1, CONTROL.END, START_DATA.table)
-        str = s:sub(pointer+1, pointer2-1)
+        str, pointer2 = decodeString(s, pointer + 1, CONTROL.END, START_DATA.table)
+        str = s:sub(pointer + 1, pointer2 - 1)
         pointer = pointer2
-        T[key or #T+1] = unserialize(str)
+        T[key or #T + 1] = unserialize(str)
       elseif char == START_DATA.int then
-        local str1 = s:sub(pointer+1, pointer+1)
-        local str2 = s:sub(pointer+2, pointer+2)
+        local str1 = s:sub(pointer + 1, pointer + 1)
+        local str2 = s:sub(pointer + 2, pointer + 2)
         pointer = pointer + 1
         local int = bit.blshift(string.byte(str1), 8) + string.byte(str2)
-        T[key or #T+1] = int
+        T[key or #T + 1] = int
       end
       key = nil
     end
@@ -637,12 +635,12 @@ local function unserialize(s)
 end
 
 return {
-  newStruct=newStruct,
-  getStruct=getStruct,
-  addType=addType,
-  getReaderWriter=getReaderWriter,
-  getReader=getReader,
-  getWriter=getWriter,
+  newStruct = newStruct,
+  getStruct = getStruct,
+  addType = addType,
+  getReaderWriter = getReaderWriter,
+  getReader = getReader,
+  getWriter = getWriter,
   stringHandle = stringHandle,
   addAlias = addAlias,
   serialize = serialize,
