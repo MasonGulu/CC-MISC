@@ -903,6 +903,16 @@ return {
       saveTaskLookup()
     end
 
+    ---Get a list of all running jobIds
+    ---@return string[]
+    local function listJobs()
+      local runningJobs = {}
+      for k, v in pairs(jobLookup) do
+        runningJobs[#runningJobs + 1] = k
+      end
+      return runningJobs
+    end
+
     local function tickCrafting()
       while true do
         local nodesTicked = false
