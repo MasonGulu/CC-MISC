@@ -5,6 +5,7 @@ parent: Modules
 # `crafting.lua`
 This is the module that controls autocrafting. It however provides no real usage on its own, currently the only available module is `grid.lua`, however `machine.lua` is also planned.
 
+This is not currently persistant, so shutting down the computer will wipe the current crafting plan. This also means don't unload it while it's crafting. Crafting persistance is planned.
 ## Interface Information
 This section is only going to cover the basic interface, if you want to add your own crafting provider look further down.
 

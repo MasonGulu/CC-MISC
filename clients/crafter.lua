@@ -468,6 +468,8 @@ if #getItemSlots() > 0 then
     empty()
 end
 
+
+-- os.queueEvent("turtleInventory")
 writeBanner()
 local ok, err = pcall(parallel.waitForAny, interface, keepAlive, modemInterface, turtleInventoryEvent, errorChecker)
 
