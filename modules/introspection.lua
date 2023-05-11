@@ -8,7 +8,7 @@ return {
   config = {
     url = {
       type = "string",
-      description = "URL to connect over",
+      description = "URL to service hosting https://github.com/SkyTheCodeMaster/cc-websocket-bridge.",
     },
     introspection = {
       type = "table",
