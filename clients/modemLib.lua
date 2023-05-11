@@ -40,11 +40,13 @@ local function getModemMessage(filter, timeout)
   end
 end
 ---Connect to the storage system
+---@param modem_name string
 function lib.connect(modem_name)
   modem = assert(peripheral.wrap(modem_name), "Invalid modem.")
   modem.open(respPort)
   name = modem.getNameLocal()
 end
+
 ---Call an interface method remotely
 ---@param method string
 ---@param ... any
@@ -87,8 +89,8 @@ end
 ---@param toSlot nil|number
 ---@param nbt nil|string
 ---@param options nil|TransferOptions
-function lib.pullItems(async,fromInventory, fromSlot, amount, toSlot, nbt, options)
-  return interface("pullItems",async,fromInventory, fromSlot, amount, toSlot, nbt, options)
+function lib.pullItems(async, fromInventory, fromSlot, amount, toSlot, nbt, options)
+  return interface("pullItems", async, fromInventory, fromSlot, amount, toSlot, nbt, options)
 end
 
 ---Push items to an inventory
@@ -99,8 +101,8 @@ end
 ---@param toSlot nil|number
 ---@param nbt nil|string
 ---@param options nil|TransferOptions
-function lib.pushItems(async,targetInventory, name, amount, toSlot, nbt, options)
-  return interface("pushItems",async,targetInventory, name, amount, toSlot, nbt, options)
+function lib.pushItems(async, targetInventory, name, amount, toSlot, nbt, options)
+  return interface("pushItems", async, targetInventory, name, amount, toSlot, nbt, options)
 end
 
 ---List inventory contents
@@ -108,8 +110,8 @@ function lib.list()
   return interface("list")
 end
 
-function lib.requestCraft(name,count)
-  return interface("requestCraft",name,count)
+function lib.requestCraft(name, count)
+  return interface("requestCraft", name, count)
 end
 
 ---Subscribe to transfers
@@ -133,14 +135,14 @@ function lib.listCraftables()
 end
 
 function lib.startCraft(jobID)
-  return interface("startCraft",jobID)
+  return interface("startCraft", jobID)
 end
 
 function lib.cancelCraft(jobID)
-  return interface("cancelCraft",jobID)
+  return interface("cancelCraft", jobID)
 end
 
-function lib.addGridRecipe(name,produces,recipe,shaped)
+function lib.addGridRecipe(name, produces, recipe, shaped)
   return interface("addGridRecipe", name, produces, recipe, shaped)
 end
 
@@ -152,4 +154,11 @@ function lib.removeGridRecipe(name)
   return interface("removeGridRecipe", name)
 end
 
-return lib
+---@type genericinterface
+return setmetatable(lib, {
+  __index = function(t, k)
+    return function(...)
+      return interface(k, ...)
+    end
+  end
+})

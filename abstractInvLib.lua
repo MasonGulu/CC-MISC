@@ -26,15 +26,15 @@ local expect = require("cc.expect").expect
 
 local abstractInventory
 
-local executeLimit = 128 -- limit of functions to run in parallel
+local executeLimit = 128        -- limit of functions to run in parallel
 
 local function ate(table, item) -- add to end
-  table[#table+1] = item
+  table[#table + 1] = item
 end
 
 local function shallowClone(t)
   local ct = {}
-  for k,v in pairs(t) do
+  for k, v in pairs(t) do
     ct[k] = v
   end
   return ct
@@ -72,9 +72,9 @@ local function call(name, func, ...)
     end
   end
   if type(name) == "string" then
-    return peripheral.call(name, func, table.unpack(args,1,args.n))
+    return peripheral.call(name, func, table.unpack(args, 1, args.n))
   elseif type(name) == "table" then
-    return name[func](table.unpack(args,1,args.n))
+    return name[func](table.unpack(args, 1, args.n))
   end
   error(("type(name)=%s"):format(type(name)), 2)
 end
@@ -145,7 +145,8 @@ local function optimalTransfer(fromInventory, toInventory, from, amount, toSlot,
     end
 
     -- queue a transfer of that item
-    local toInv, fromInv, fslot, limit, tslot = destinationInfo.inventory, cachedItem.inventory, cachedItem.slot, itemsToMove, destinationInfo.slot
+    local toInv, fromInv, fslot, limit, tslot = destinationInfo.inventory, cachedItem.inventory, cachedItem.slot,
+        itemsToMove, destinationInfo.slot
 
     if limit ~= 0 then
       ate(transferCache, function()
@@ -182,7 +183,6 @@ local function optimalTransfer(fromInventory, toInventory, from, amount, toSlot,
     else
       fromInventory._updateItem(updatedItem, cachedItem.inventory, cachedItem.slot)
     end
-
   end
 
   batchExecute(transferCache)
@@ -255,7 +255,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   local function log(formatString, ...)
     if logFilename then
       local logf = assert(fs.open(logFilename, "a"))
-      logf.write(string.format(formatString, ...).."\n")
+      logf.write(string.format(formatString, ...) .. "\n")
       logf.close()
     end
   end
@@ -334,7 +334,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---@type table<integer,boolean>
   local busySlots = {}
 
-  local function removeSlotFromEmptySlots(inventory,slot)
+  local function removeSlotFromEmptySlots(inventory, slot)
     emptySlotLUT[inventory] = emptySlotLUT[inventory] or {}
     emptySlotLUT[inventory][slot] = nil
     if not next(emptySlotLUT[inventory]) then
@@ -346,7 +346,6 @@ function abstractInventory(inventories, assumeLimits, logSettings)
     return busySlots[slot]
   end
 
-
   ---Cache a given item, ensuring that whatever was in the slot beforehand is wiped properly
   ---And the caches are managed correctly.
   ---@param item table|nil
@@ -354,7 +353,8 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---@param slot number
   ---@return CachedItem
   local function cacheItem(item, inventory, slot)
-    local calln = logEntry(logCache, "cacheItem(%s, %s, %s)", select(2, pcall(textutils.serialise, item, {compact=true})), inventory, slot)
+    local calln = logEntry(logCache, "cacheItem(%s, %s, %s)", select(2, pcall(textutils.serialise, item, { compact = true })),
+      inventory, slot)
     expect(1, item, "table", "nil")
     expect(2, inventory, "string", "table")
     expect(3, slot, "number")
@@ -388,7 +388,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
         end
       end
     end
-    removeSlotFromEmptySlots(inventory,slot)
+    removeSlotFromEmptySlots(inventory, slot)
     if not inventorySlotLUT[inventory][slot] then
       inventorySlotLUT[inventory][slot] = {
         item = item,
@@ -413,7 +413,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
       itemNameNBTLUT[item.name][nbt] = itemNameNBTLUT[item.name][nbt] or {}
       itemNameNBTLUT[item.name][nbt][cachedItem] = cachedItem
       if item.tags then
-        for k,v in pairs(item.tags) do
+        for k, v in pairs(item.tags) do
           tagLUT[k] = tagLUT[k] or {}
           tagLUT[k][item.name] = true
         end
@@ -437,7 +437,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
       emptySlotLUT[inventory] = emptySlotLUT[inventory] or {}
       emptySlotLUT[inventory][slot] = true
     end
-    logExit(logCache, calln, "cacheItem", select(2, pcall(textutils.serialise, cachedItem, {compact=true})))
+    logExit(logCache, calln, "cacheItem", select(2, pcall(textutils.serialise, cachedItem, { compact = true })))
     return cachedItem
   end
   api._cacheItem = cacheItem
@@ -459,12 +459,13 @@ function abstractInventory(inventories, assumeLimits, logSettings)
 
   local function refreshInventory(inventory, deep)
     local deepCacheFunctions = {}
-    local inventoryName,slots,minSlot,maxSlot
+    local inventoryName, slots, minSlot, maxSlot
     if type(inventory) == "table" then
       inventoryName = assert(inventory.name or (inventory.list and inventory), "Invalid inventory")
       slots = inventory.slots
       minSlot = inventory.minSlot or 1
-      maxSlot = inventory.maxSlot or assert(call(inventoryName, "size"), ("%s is not a valid inventory."):format(inventoryName))
+      maxSlot = inventory.maxSlot or
+      assert(call(inventoryName, "size"), ("%s is not a valid inventory."):format(inventoryName))
     else
       inventoryName = inventory
       minSlot = 1
@@ -473,30 +474,30 @@ function abstractInventory(inventories, assumeLimits, logSettings)
     if not slots then
       slots = {}
       for i = minSlot, maxSlot do
-        slots[#slots+1] = i
+        slots[#slots + 1] = i
       end
     end
     emptySlotLUT[inventoryName] = {}
     for _, i in ipairs(slots) do
       emptySlotLUT[inventoryName][i] = true
-      local slotnumber = #slotNumberLUT+1
-      slotNumberLUT[slotnumber] = {inventory=inventoryName, slot=i}
+      local slotnumber = #slotNumberLUT + 1
+      slotNumberLUT[slotnumber] = { inventory = inventoryName, slot = i }
       inventorySlotNumberLUT[inventoryName] = inventorySlotNumberLUT[inventoryName] or {}
       inventorySlotNumberLUT[inventoryName][i] = slotnumber
     end
     inventoryLimit[inventoryName] = call(inventoryName, "getItemLimit", 1) -- this should make transfers from/to this inventory parallel safe.
     local listings = call(inventoryName, "list")
     if not deep then
-      for _,i in ipairs(slots) do
+      for _, i in ipairs(slots) do
         if listings[i] then
           cacheItem(listings[i], inventoryName, i)
         end
       end
     else
-      for _,i in ipairs(slots) do
+      for _, i in ipairs(slots) do
         local listing = listings[i]
         if listing then
-          deepCacheFunctions[#deepCacheFunctions+1] = function()
+          deepCacheFunctions[#deepCacheFunctions + 1] = function()
             deepItemLUT[listing.name] = deepItemLUT[listing.name] or {}
             if deepItemLUT[listing.name][listing.nbt or "NONE"] then
               local item = shallowClone(deepItemLUT[listing.name][listing.nbt or "NONE"])
@@ -522,13 +523,14 @@ function abstractInventory(inventories, assumeLimits, logSettings)
     if type(deep) == "nil" then
       deep = true
     end
-    itemNameNBTLUT, itemSpaceLUT, inventorySlotLUT, inventoryLimit, emptySlotLUT, slotNumberLUT, inventorySlotNumberLUT, tagLUT, deepItemLUT = {}, {}, {}, {}, {}, {}, {}, {}, {}
+    itemNameNBTLUT, itemSpaceLUT, inventorySlotLUT, inventoryLimit, emptySlotLUT, slotNumberLUT, inventorySlotNumberLUT, tagLUT, deepItemLUT =
+    {}, {}, {}, {}, {}, {}, {}, {}, {}
     local inventoryRefreshers = {}
     local deepCacheFunctions = {}
     for _, inventory in pairs(inventories) do
       table.insert(inventoryRefreshers, function()
-        for k,v in ipairs(refreshInventory(inventory, deep) or {}) do
-          deepCacheFunctions[#deepCacheFunctions+1] = v
+        for k, v in ipairs(refreshInventory(inventory, deep) or {}) do
+          deepCacheFunctions[#deepCacheFunctions + 1] = v
         end
       end)
     end
@@ -539,7 +541,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---Get an inventory slot for a given item
   ---@param name string
   ---@param nbt nil|string
-  ---@return nil|CachedItem 
+  ---@return nil|CachedItem
   local function getItem(name, nbt)
     nbt = nbt or "NONE"
     if not (itemNameNBTLUT[name] and itemNameNBTLUT[name][nbt]) then
@@ -568,7 +570,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---Get an inventory slot that has space for a given item
   ---@param name string
   ---@param nbt nil|string
-  ---@return nil|CachedItem 
+  ---@return nil|CachedItem
   local function getSlotWithSpace(name, nbt)
     nbt = nbt or "NONE"
     if not (itemSpaceLUT[name] and itemSpaceLUT[name][nbt]) then
@@ -656,7 +658,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   local function pullItemsOptimal(fromInventory, fromSlot, amount, toSlot, nbt, options)
     local calln = logEntry(logOptimal, "pullItemsOptimal", fromInventory, fromSlot, amount, toSlot, nbt)
     if type(fromInventory) == "string" or not fromInventory.abstractInventory then
-      fromInventory = abstractInventory({fromInventory})
+      fromInventory = abstractInventory({ fromInventory })
       fromInventory.refreshStorage()
     end
     local ret = optimalTransfer(fromInventory, api, fromSlot, amount, toSlot, nbt, options, calln)
@@ -707,7 +709,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
     local calln = logEntry(logOptimal, "pushItemsOptimal", targetInventory, name, amount, toSlot, nbt)
     if type(targetInventory) == "string" or not targetInventory.abstractInventory then
       -- We'll see if this is a good optimization or not
-      targetInventory = abstractInventory({targetInventory})
+      targetInventory = abstractInventory({ targetInventory })
       targetInventory.refreshStorage()
     end
     local ret = optimalTransfer(api, targetInventory, name, amount, toSlot, nbt, options, calln)
@@ -732,7 +734,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
     expect(6, options, "nil", "table")
     amount = amount or 64
     options = options or {}
-    for k,v in pairs(defaultOptions) do
+    for k, v in pairs(defaultOptions) do
       if options[k] == nil then
         options[k] = v
       end
@@ -752,7 +754,6 @@ function abstractInventory(inventories, assumeLimits, logSettings)
     return logExit(logApi, calln, "api.pushItems", ret)
   end
 
-
   local function pullItemsUnoptimal(fromInventory, fromSlot, amount, toSlot, nbt, options)
     local calln = logEntry(logUnoptimal, "pullItemsUnoptimal", fromInventory, fromSlot, amount, toSlot, nbt)
     assert(type(fromSlot) == "number", "Must pull from a slot #")
@@ -769,7 +770,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
       end
       local limit = math.min(amount - itemsPulled, space)
       busySlots[inventorySlotNumberLUT[freeInventory][freeSlot]] = true
-      cacheItem({name="UNKNOWN", count=0}, freeInventory, freeSlot)
+      cacheItem({ name = "UNKNOWN", count = 0 }, freeInventory, freeSlot)
       local moved = call(freeInventory, "pullItems", fromInventory, fromSlot, limit, freeSlot)
       cacheSlot(freeInventory, freeSlot)
       busySlots[inventorySlotNumberLUT[freeInventory][freeSlot]] = nil
@@ -802,7 +803,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
     expect(5, nbt, "nil", "string")
     expect(6, options, "nil", "table")
     options = options or {}
-    for k,v in pairs(defaultOptions) do
+    for k, v in pairs(defaultOptions) do
       if options[k] == nil then
         options[k] = v
       end
@@ -825,7 +826,6 @@ function abstractInventory(inventories, assumeLimits, logSettings)
     return logExit(logApi, calln, "api.pullItems", ret)
   end
 
-
   ---Get the amount of this item in storage
   ---@param item string
   ---@param nbt nil|string
@@ -838,7 +838,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
       return 0
     end
     local totalCount = 0
-    for k,v in pairs(itemNameNBTLUT[item][nbt]) do
+    for k, v in pairs(itemNameNBTLUT[item][nbt]) do
       totalCount = totalCount + v.item.count
     end
     return totalCount
@@ -848,8 +848,8 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---@return table list CachedItem[]
   function api.listItems()
     local t = {}
-    for name,nbtt in pairs(itemNameNBTLUT) do
-      for nbt,cachedItem in pairs(nbtt) do
+    for name, nbtt in pairs(itemNameNBTLUT) do
+      for nbt, cachedItem in pairs(nbtt) do
         ate(t, cachedItem)
       end
     end
@@ -860,8 +860,8 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---@return table
   function api.listNames()
     local t = {}
-      for k,v in pairs(itemNameNBTLUT) do
-      t[#t+1] = k
+    for k, v in pairs(itemNameNBTLUT) do
+      t[#t + 1] = k
     end
     return t
   end
@@ -871,8 +871,8 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---@return table
   function api.listNBT(name)
     local t = {}
-    for k,v in pairs(itemNameNBTLUT[name] or {}) do
-      t[#t+1] = k
+    for k, v in pairs(itemNameNBTLUT[name] or {}) do
+      t[#t + 1] = k
     end
     return t
   end
@@ -939,10 +939,15 @@ function abstractInventory(inventories, assumeLimits, logSettings)
       print(string.format("Warning, setting a very low batch limit (%u), abstractInvLib will be very slow."):format(n))
     end
     if n > 250 then
-      error(string.format("Attempt to set batch limit to %u, the event queue is 256 elements long. This is very likely to result in dropped events.", n), 2)
+      error(
+      string.format(
+      "Attempt to set batch limit to %u, the event queue is 256 elements long. This is very likely to result in dropped events.",
+        n), 2)
     end
     if n > 150 then
-      print(string.format("Warning, the event queue is 256 elements long and the batch limit is %u. It is possible that you may have dropped events", n))
+      print(string.format(
+      "Warning, the event queue is 256 elements long and the batch limit is %u. It is possible that you may have dropped events",
+        n))
     end
     executeLimit = n
   end
@@ -965,9 +970,9 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---@return table
   function api.listItemAmounts()
     local t = {}
-    for _,itemName in ipairs(api.listNames()) do
+    for _, itemName in ipairs(api.listNames()) do
       t[itemName] = 0
-      for _,nbt in ipairs(api.listNBT(itemName)) do
+      for _, nbt in ipairs(api.listNBT(itemName)) do
         t[itemName] = t[itemName] + api.getCount(itemName, nbt)
       end
     end
@@ -978,8 +983,8 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---@return string[]
   function api.getTag(tag)
     local t = {}
-    for k,v in pairs(tagLUT[tag] or {}) do
-      table.insert(t,k)
+    for k, v in pairs(tagLUT[tag] or {}) do
+      table.insert(t, k)
     end
     return t
   end
@@ -990,7 +995,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
     local ret = {}
     ret.total = api.size()
     ret.used = 0
-    for i,_ in pairs(api.list()) do
+    for i, _ in pairs(api.list()) do
       ret.used = ret.used + 1
     end
     ret.free = ret.total - ret.used
@@ -1029,18 +1034,18 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---@return integer moved total items moved
   function api.pullAll(inventory)
     if type(inventory) == "string" or not inventory.abstractInventory then
-      inventory = abstractInventory({inventory})
+      inventory = abstractInventory({ inventory })
       inventory.refreshStorage()
     end
     local moved = 0
-    for k,_ in pairs(inventory.list()) do
+    for k, _ in pairs(inventory.list()) do
       moved = moved + api.pullItems(inventory, k)
     end
     return moved
   end
 
   local function getItemIndex(t, item)
-    for k,v in ipairs(t) do
+    for k, v in ipairs(t) do
       if v == item then
         return k
       end
@@ -1051,7 +1056,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---@param inventory string|invPeripheral
   ---@return boolean success
   function api.addInventory(inventory)
-    expect(1,inventory,"string","table")
+    expect(1, inventory, "string", "table")
     if getItemIndex(inventories, inventory) then
       return false
     end
@@ -1064,7 +1069,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---@param inventory string|invPeripheral
   ---@return boolean success
   function api.removeInventory(inventory)
-    expect(1,inventory,"string", "table")
+    expect(1, inventory, "string", "table")
     local index = getItemIndex(inventories, inventory)
     if not index then
       return false
@@ -1078,7 +1083,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
   ---@return integer
   function api.freeSpace()
     local count = 0
-    for _,inventorySlots in pairs(emptySlotLUT) do
+    for _, inventorySlots in pairs(emptySlotLUT) do
       for _, _ in pairs(inventorySlots) do
         count = count + 1
       end
@@ -1094,7 +1099,7 @@ function abstractInventory(inventories, assumeLimits, logSettings)
     expect(1, name, "string")
     expect(2, nbt, "string", "nil")
     local count = 0
-    for inventory,inventorySlots in pairs(emptySlotLUT) do
+    for inventory, inventorySlots in pairs(emptySlotLUT) do
       for _, _ in pairs(inventorySlots) do
         count = count + (inventoryLimit[inventory] or 64)
       end
@@ -1112,4 +1117,5 @@ function abstractInventory(inventories, assumeLimits, logSettings)
 
   return api
 end
+
 return abstractInventory

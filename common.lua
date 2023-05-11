@@ -15,9 +15,9 @@ local function loadTableFromFile(file)
     print("no file :(", file)
     return nil
   end
-  local t = textutils.unserialise(f.readAll())
+  local t = textutils.unserialise(f.readAll() --[[@as string]])
   f.close()
-  return t
+  return t --[[@as table]]
 end
 
 local function printf(s, ...)
