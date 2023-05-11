@@ -87,7 +87,10 @@ return {
                 -- how far off the closest multiple of the fuel is from the desired amount
                 local multiple = v.smelts
                 local optimal = math.ceil((toSmelt or 0) / multiple) * multiple
-                fuelDiffs[#fuelDiffs + 1] = { diff = optimal - toSmelt, optimal = optimal, fuel = k, multiple = multiple }
+                if loaded.inventory.interface.getCount(k) >= optimal then
+                    fuelDiffs[#fuelDiffs + 1] = { diff = optimal - toSmelt, optimal = optimal, fuel = k,
+                        multiple = multiple }
+                end
             end
             table.sort(fuelDiffs, function(a, b)
                 return a.diff < b.diff

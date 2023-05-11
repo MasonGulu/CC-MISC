@@ -1,30 +1,24 @@
 local repositoryUrl = "https://raw.githubusercontent.com/MasonGulu/CC-MISC/master/"
 
-if ({...})[1] == "dev" then
+if ({ ... })[1] == "dev" then
   repositoryUrl = "https://raw.githubusercontent.com/MasonGulu/CC-MISC/dev/"
 end
 
 local function fromURL(url)
-  return {url = url}
+  return { url = url }
 end
 
 local function fromRepository(url)
-  return fromURL(repositoryUrl..url)
+  return fromURL(repositoryUrl .. url)
 end
 
-local fullInstall = {
-  name = "Install MISC and all modules",
+local craftInstall = {
+  name = "Install all crafting modules",
   files = {
-    ["startup.lua"] = fromRepository "storage.lua",
-    ["abstractInvLib.lua"] = fromURL "https://gist.githubusercontent.com/MasonGulu/57ef0f52a93304a17a9eaea21f431de6/raw/07c3322a5fa0d628e558e19017295728e4ee2e8d/abstractInvLib.lua", -- TODO change this
-    ["common.lua"] = fromRepository "common.lua",
     ["bfile.lua"] = fromRepository "bfile.lua",
     modules = {
-      ["inventory.lua"] = fromRepository "modules/inventory.lua",
-      ["logger.lua"] = fromRepository "modules/logger.lua",
-      ["interface.lua"] = fromRepository "modules/interface.lua",
-      ["modem.lua"] = fromRepository "modules/modem.lua",
       ["crafting.lua"] = fromRepository "modules/crafting.lua",
+      ["furnace.lua"] = fromRepository "modules/furnace.lua",
       ["grid.lua"] = fromRepository "modules/grid.lua",
     },
     recipes = {
@@ -34,13 +28,31 @@ local fullInstall = {
   }
 }
 
-local minInstall = {
-  name = "Install MISC and the minimal interface modules",
+local logInstall = {
+  name = "Install a logger",
+  files = {
+    modules = {
+      ["logger.lua"] = fromRepository "modules/logger.lua"
+    }
+  }
+}
+
+local introspectionInstall = {
+  name = "Install the modules necessary for use with the introspection module",
+  files = {
+    modules = {
+      ["introspection.lua"] = fromRepository "modules/introspection.lua",
+      ["interface.lua"] = fromRepository "modules/interface.lua"
+    }
+  }
+}
+
+local baseInstall = {
+  name = "Install base MISC and basic modem modules.",
   files = {
     ["startup.lua"] = fromRepository "storage.lua",
     ["abstractInvLib.lua"] = fromURL "https://gist.githubusercontent.com/MasonGulu/57ef0f52a93304a17a9eaea21f431de6/raw/07c3322a5fa0d628e558e19017295728e4ee2e8d/abstractInvLib.lua", -- TODO change this
     ["common.lua"] = fromRepository "common.lua",
-    ["bfile.lua"] = fromRepository "bfile.lua",
     modules = {
       ["inventory.lua"] = fromRepository "modules/inventory.lua",
       ["interface.lua"] = fromRepository "modules/interface.lua",
@@ -51,8 +63,10 @@ local minInstall = {
 
 local serverInstallOptions = {
   name = "Server installation options",
-  f = fullInstall,
-  m = minInstall
+  b = baseInstall,
+  c = craftInstall,
+  i = introspectionInstall,
+  l = logInstall
 }
 
 local terminalInstall = {
@@ -105,14 +119,14 @@ end
 
 local function displayOptions(options)
   term.clear()
-  term.setCursorPos(1,1)
+  term.setCursorPos(1, 1)
   term.setTextColor(colors.black)
   term.setBackgroundColor(colors.white)
   term.clearLine()
   print("MISC INSTALLER")
   term.setTextColor(colors.white)
   term.setBackgroundColor(colors.black)
-  for k,v in pairs(options) do
+  for k, v in pairs(options) do
     if k ~= "name" then
       print(string.format("[%s] %s", k, v.name))
     end
@@ -123,16 +137,16 @@ local alwaysOverwrite = false
 
 local function downloadFile(path, url)
   print(string.format("Installing %s to %s", url, path))
-  local response = assert(http.get(url, nil, true), "Failed to get "..url)
+  local response = assert(http.get(url, nil, true), "Failed to get " .. url)
   local writeFile = true
   if fs.exists(path) and not alwaysOverwrite then
     term.write("%s already exists, overwrite? Y/n/always? ")
-    local i = io.read():sub(1,1)
+    local i = io.read():sub(1, 1)
     alwaysOverwrite = i == "a"
     writeFile = alwaysOverwrite or i ~= "n"
   end
   if writeFile then
-    local f = assert(fs.open(path, "wb"), "Cannot open file "..path)
+    local f = assert(fs.open(path, "wb"), "Cannot open file " .. path)
     f.write(response.readAll())
     f.close()
   end
@@ -140,13 +154,13 @@ local function downloadFile(path, url)
 end
 
 local function downloadFiles(folder, files)
-  for k,v in pairs(files) do
+  for k, v in pairs(files) do
     local path = fs.combine(folder, k)
     if v.url then
-      downloadFile(path,v.url)
+      downloadFile(path, v.url)
     else
       fs.makeDir(path)
-      downloadFiles(path,v)
+      downloadFiles(path, v)
     end
   end
 end
