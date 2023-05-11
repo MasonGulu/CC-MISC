@@ -439,7 +439,7 @@ local retries = 0
 local function errorChecker()
     resumeState()
     while true do
-        if os.epoch("utc") - lastStateChange > 10000 then
+        if os.epoch("utc") - lastStateChange > 30000 then
             lastStateChange = os.epoch("utc")
             if state == STATES.DONE then
                 signalDone()
