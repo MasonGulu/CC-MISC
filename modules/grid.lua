@@ -5,10 +5,6 @@ return {
   id = "grid",
   version = "1.1.7",
   config = {
-    modem = {
-      type = "string",
-      description = "Modem to host crafting turtles on. This needs to be the same one the turtles AND inventory are on.",
-    },
     port = {
       type = "number",
       description = "Port to host crafting turtles on.",
@@ -23,6 +19,7 @@ return {
   dependencies = {
     logger = { min = "1.1", optional = true },
     crafting = { min = "1.1" },
+    interface = { min = "1.4" }
   },
   ---@param loaded {crafting: modules.crafting, logger: modules.logger|nil}
   init = function(loaded, config)
@@ -202,7 +199,7 @@ return {
 
 
     local attachedTurtles = {}
-    local modem = assert(peripheral.wrap(config.grid.modem.value), "Bad modem specified.")
+    local modem = assert(peripheral.wrap(config.modem.modem.value), "Bad modem specified.")
     modem.open(config.grid.port.value)
 
     local function emptyTurtle(turtle)

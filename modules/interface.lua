@@ -3,15 +3,15 @@ local common = require "common"
 ---@field interface modules.interface.interface
 return {
   id = "interface",
-  version = "1.3.0",
+  version = "1.4.0",
   dependencies = {
     inventory = { min = "1.1" },
     crafting = { optional = true, min = "1.1" },
-    grid = { optional = true, min = "1.1" },
   },
   ---@param loaded {inventory: modules.inventory, crafting: modules.crafting|nil, grid: modules.grid|nil}
   init = function(loaded, config)
     loaded = loaded
+    ---@class genericinterface
     local genericInterface = {}
     ---Push items to an inventory
     ---@param async boolean
@@ -153,6 +153,21 @@ return {
     ---@return table<string,string> modules name -> version
     function genericInterface.getModules()
       return loadedModules
+    end
+
+    ---Get the current config environment
+    ---@return table
+    function genericInterface.getConfig()
+      return config
+    end
+
+    ---Set a config value
+    ---@param module string
+    ---@param setting string
+    ---@param value any
+    ---@return boolean
+    function genericInterface.setConfigValue(module, setting, value)
+      return config.set(config[module][setting], value)
     end
 
     local interface = {}

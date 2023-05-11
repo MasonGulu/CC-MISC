@@ -9,9 +9,9 @@ local function loadModuleList(filename)
   local line = f.readLine()
   while line do
     if line:sub(-4) == ".lua" then
-      line = line:sub(1,-5)
+      line = line:sub(1, -5)
     end
-    line:gsub("/",".")
+    line:gsub("/", ".")
     table.insert(moduleFilenames, line)
     line = f.readLine()
   end
@@ -21,13 +21,13 @@ local function loadModulesFolder(foldername)
   local list = fs.list(foldername)
   for _, fn in ipairs(list) do
     if not fs.isDir(fn) and fn:sub(-4) == ".lua" then
-      local moduleFn = foldername.."."..fn:gsub("/","."):sub(1,-5)
+      local moduleFn = foldername .. "." .. fn:gsub("/", "."):sub(1, -5)
       table.insert(moduleFilenames, moduleFn)
     end
   end
 end
 
-local args = {...}
+local args = { ... }
 if args[1] then
   if fs.isDir(args[1]) then
     loadModulesFolder(args[1])
@@ -61,7 +61,7 @@ local unorderedModules = {}
 
 ---@type table<string,module>
 local loaded = {}
-for _,v in ipairs(moduleFilenames) do
+for _, v in ipairs(moduleFilenames) do
   ---@type module
   local mod = require(v)
   table.insert(unorderedModules, mod)
@@ -74,7 +74,7 @@ end
 
 local function protectedIndex(t, ...)
   local curIndex = t
-  for k,v in pairs({...}) do
+  for k, v in pairs({ ... }) do
     curIndex = curIndex[v]
     if curIndex == nil then
       return nil
@@ -90,8 +90,8 @@ local function split(inputstr, sep)
   if sep == nil then
     sep = "%s"
   end
-  local t={}
-  for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+  local t = {}
+  for str in string.gmatch(inputstr, "([^" .. sep .. "]+)") do
     table.insert(t, str)
   end
   return t
@@ -105,8 +105,8 @@ end
 ---@return boolean
 ---@nodiscard
 local function checkSemVer(ver, min, max)
-  local verSplit = split(ver,".")
-  local minSplit = split(min,".")
+  local verSplit = split(ver, ".")
+  local minSplit = split(min, ".")
   -- check min
   local verMajor = tonumber(verSplit[1])
   local verMinor = tonumber(verSplit[2])
@@ -145,24 +145,25 @@ local function visit(module)
     if depModule then
       if not checkSemVer(depModule.version, info.min, info.max) then
         if info.max then
-          error(("Module %s requires %s [v%s.*,v%s.*]. v%s loaded."):format(module.id, id, info.min, info.max, depModule.version))
+          error(("Module %s requires %s [v%s.*,v%s.*]. v%s loaded."):format(module.id, id, info.min, info.max,
+            depModule.version))
         else
           error(("Module %s requires %s v%s.*. v%s loaded."):format(module.id, id, info.min, depModule.version))
         end
       end
       visit(depModule)
     elseif not info.optional then
-      error(("Module %s requires %s, which is not present."):format(module.id,id))
+      error(("Module %s requires %s, which is not present."):format(module.id, id))
     end
   end
 
   module.temporary = nil
   module.permanant = true
-  table.insert(moduleInitOrder,module)
+  table.insert(moduleInitOrder, module)
 end
 
 local function getUnmarked()
-  for k,v in pairs(unorderedModules) do
+  for k, v in pairs(unorderedModules) do
     if not v.permanant then
       return v
     end
@@ -176,7 +177,7 @@ while unmarked do
   unmarked = getUnmarked()
 end
 
-for k,v in pairs(unorderedModules) do
+for k, v in pairs(unorderedModules) do
   v.permanant = nil
 end
 
@@ -184,7 +185,7 @@ end
 
 local function getValue(type)
   while true do
-    term.write("Please input a "..type..": ")
+    term.write("Please input a " .. type .. ": ")
     local input = io.read()
     if type == "table" then
       local val = textutils.unserialise(input)
@@ -220,7 +221,7 @@ for id, spec in pairs(config) do
       if loaded[id].setup then
         loaded[id].setup(config[id])
         assert(type(config[id][name].value) == info.type,
-        ("Module %s setup failed to set %s"):format(id,name))
+          ("Module %s setup failed to set %s"):format(id, name))
         -- if a module has a first time setup defined, call it
       else
         print(("Config option %s.%s is invalid"):format(id, name, info.type))
@@ -232,12 +233,24 @@ for id, spec in pairs(config) do
 end
 
 -- Persist old settings
-for k,v  in pairs(loadedConfig) do
+for k, v in pairs(loadedConfig) do
   config[k] = config[k] or v
 end
 
+local function deepCloneNoFunc(t)
+  local nt = {}
+  for k, v in pairs(t) do
+    if type(v) == "table" then
+      nt[k] = deepCloneNoFunc(v)
+    elseif type(v) ~= "function" then
+      nt[k] = v
+    end
+  end
+  return nt
+end
+
 local function saveConfig()
-  common.saveTableToFile("config.txt", config, false, true)
+  common.saveTableToFile("config.txt", deepCloneNoFunc(config), false, true)
 end
 saveConfig()
 
@@ -248,16 +261,19 @@ saveConfig()
 config.set = function(setting, value)
   if type(value) == setting.type then
     setting.value = value
+    saveConfig()
     return true
   end
   if setting.type == "number" and tonumber(value) then
     setting.value = tonumber(value)
+    saveConfig()
     return true
   end
   if setting.type == "table" and value then
     local val = textutils.unserialise(value)
-    if val then
+    if type(val) == "table" then
       setting.value = val
+      saveConfig()
       return true
     end
   end
@@ -274,7 +290,7 @@ local moduleExecution = {}
 local moduleFilters = {}
 ---@type string[]
 local moduleIds = {}
-for _,mod in ipairs(moduleInitOrder) do
+for _, mod in ipairs(moduleInitOrder) do
   if mod.init then
     local t0 = os.clock()
     -- The table returned by init will be placed into [id].interface
@@ -296,7 +312,7 @@ end
 ---@param stacktrace string module stacktrace
 ---@param error string
 local function saveCrashReport(module, stacktrace, error)
-  local f, reason = fs.open("crash.txt","w")
+  local f, reason = fs.open("crash.txt", "w")
   if not f then
     print("Unable to save crash report!")
     print(reason)
@@ -305,12 +321,12 @@ local function saveCrashReport(module, stacktrace, error)
   f.write("===MISC Crash Report===\n")
   f.write(("Generated on %s\n"):format(os.date()))
   f.write(("There were %u modules loaded.\n"):format(#moduleFilenames))
-  for _,v in ipairs(moduleInitOrder) do
+  for _, v in ipairs(moduleInitOrder) do
     local icon = "-"
     if v.id == module then
       icon = "*"
     end
-    f.write(("%s %s v%s\n"):format(icon,v.id,v.version))
+    f.write(("%s %s v%s\n"):format(icon, v.id, v.version))
   end
   f.write("--- ERROR\n")
   f.write(error)
