@@ -143,11 +143,11 @@ local function inventoryPoll()
     end
 end
 
-local SEARCH, CRAFT, INFO, REQUEST
+local SEARCH, CRAFT, INFO, REQUEST, SYSINFO
 
 local display = window.create(term.current(), 1, 1, term.getSize())
 local mode = ""
-local modes = { "SEARCH", "CRAFT", "CONFIG" }
+local modes = { "SEARCH", "CRAFT", "CONFIG", "SYSINFO" }
 local modeLookup
 local w, h = display.getSize()
 local itemCountW = 5
@@ -725,9 +725,9 @@ local function handleEditEvents(ctrlHeld, e, tab, selected, parent)
                     tab.update()
                 end
                 ctrlHeld = false
-            elseif e[2] == keys.n then
+            elseif e[2] == keys.n or e[2] == keys.r then
                 -- new element
-                if selected and selected.type == "table" then
+                if e[2] == keys.n and selected and selected.type == "table" then
                     parent = selected.value
                 end
                 parent[#parent + 1] = "new value"
@@ -781,7 +781,7 @@ local function editTable(splitDesc, setting)
             end
             y = y + 1
             text(1, h, "Cancel ^c")
-            local nstring = "New ^n"
+            local nstring = "New ^n/^r"
             text(math.floor((w - #nstring) / 2), h, nstring)
             local dstring = "Done ^d"
             text(w - #dstring, h, dstring)
@@ -884,7 +884,31 @@ function CONFIG()
     return searchableMenu(drawer, function() return configList end, onSelect, nil, sort, match, nil)
 end
 
-modeLookup = { SEARCH = SEARCH, CRAFT = CRAFT, CONFIG = CONFIG }
+function SYSINFO()
+    mode = "SYSINFO"
+    local timer = os.startTimer(1)
+    while true do
+        local usage = lib.getUsage()
+        local status = lib.getCraftStatus()
+        draw(function()
+            text(1, 2, "System Info")
+            text(1, 3, ("%u Used / %u Total (%u Free)"):format(usage.used, usage.total, usage.free))
+            text(1, 4, ("Crafting jobs active: %u"):format(status.jobs))
+            text(1, 5, ("Crafting tasks active: %u"):format(status.tasks))
+        end)
+        local e = { os.pullEvent() }
+        if e[1] == "mouse_click" then
+            local nm = handleClicks(e[3], e[4])
+            if nm then
+                return nm()
+            end
+        elseif e[1] == "timer" and e[2] == timer then
+            timer = os.startTimer(1)
+        end
+    end
+end
+
+modeLookup = { SEARCH = SEARCH, CRAFT = CRAFT, CONFIG = CONFIG, SYSINFO = SYSINFO }
 
 if turtleMode then
     parallel.waitForAny(lib.subscribe, eventTurtleInventory, SEARCH)

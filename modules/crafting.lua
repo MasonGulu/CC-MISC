@@ -640,6 +640,9 @@ return {
       assert(task.children == nil, "Attempt to delete task with children.")
       taskLookup[task.taskId] = nil
       removeFromArray(jobLookup[task.jobId], task)
+      if #jobLookup[task.jobId] == 0 then
+        jobLookup[task.jobId] = nil
+      end
     end
 
     local nodeStateLogger = setmetatable({}, {
@@ -913,6 +916,15 @@ return {
       return runningJobs
     end
 
+    ---Get a list of taskIds for a given job
+    local function listTasks(job)
+      local tasks = {}
+      for k, v in pairs(jobLookup[job]) do
+        tasks[#tasks + 1] = v.taskId
+      end
+      return tasks
+    end
+
     local function tickCrafting()
       while true do
         local nodesTicked = false
@@ -1070,6 +1082,12 @@ return {
             pendingJobs[k] = nil
           end
         end
+        for k, v in pairs(jobLookup) do
+          if #v == 0 then
+            cleanupLogger:debug("No tasks with JobId %s, removing from the lookkup.", k)
+            jobLookup[k] = nil
+          end
+        end
         for name, nodes in pairs(reservedItems) do
           for nodeId, count in pairs(nodes) do
             if not taskLookup[nodeId] then
@@ -1112,6 +1130,8 @@ return {
       loadJson = loadJson,
       listCraftables = listCraftables,
       cancelCraft = cancelCraft,
+      listJobs = listJobs,
+      listTasks = listTasks,
 
       recipeInterface = {
         changeNodeState = changeNodeState,

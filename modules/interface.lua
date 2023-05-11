@@ -138,6 +138,29 @@ return {
       return loaded.grid.interface.removeGridRecipe(name)
     end
 
+    ---List all active crafting jobIds
+    ---@return string[]
+    function genericInterface.listCraftJobs()
+      if not loaded.crafting then
+        return {}
+      end
+      return loaded.crafting.interface.listJobs()
+    end
+
+    ---Get the status of crafting
+    ---@return {jobs: integer, tasks: integer}
+    function genericInterface.getCraftStatus()
+      if not loaded.crafting then
+        return { jobs = 0, tasks = 0 }
+      end
+      local jobs = loaded.crafting.interface.listJobs()
+      local tasks = 0
+      for k, v in pairs(jobs) do
+        tasks = tasks + #loaded.crafting.interface.listTasks(v)
+      end
+      return { jobs = #jobs, tasks = tasks }
+    end
+
     ---Get the slot usage of this inventory
     ---@return {free: integer, used:integer, total:integer}
     function genericInterface.getUsage()

@@ -30,7 +30,9 @@ return {
     inventoryRemovePatterns = {
       type = "table",
       description = "List of lua patterns, peripheral names that match this pattern will be removed from the storage.",
-      default = {},
+      default = {
+        "minecraft:furnace_.+"
+      },
     },
     flushTimer = {
       type = "number",
