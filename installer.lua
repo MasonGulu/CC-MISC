@@ -62,19 +62,37 @@ local baseInstall = {
   }
 }
 
+local ioInstall = {
+  name = "Install the generic i/o module",
+  files = {
+    modules = {
+      ["io.lua"] = fromRepository "modules/io.lua"
+    }
+  }
+}
+
 local serverInstallOptions = {
   name = "Server installation options",
   b = baseInstall,
   c = craftInstall,
   i = introspectionInstall,
-  l = logInstall
+  l = logInstall,
+  o = ioInstall,
 }
 
 local terminalInstall = {
-  name = "Install a basic item access terminal on a turtle",
+  name = "Install a basic item access terminal",
   files = {
     ["startup.lua"] = fromRepository "clients/terminal.lua",
     ["modemLib.lua"] = fromRepository "clients/modemLib.lua"
+  }
+}
+
+local introspectionTermInstall = {
+  name = "Install a basic item access terminal for introspection module use",
+  files = {
+    ["startup.lua"] = fromRepository "clients/terminal.lua",
+    ["websocketLib.lua"] = fromRepository "clients/websocketLib.lua"
   }
 }
 
@@ -96,6 +114,7 @@ local monitorInstall = {
 local clientInstallOptions = {
   name = "Client installation options",
   t = terminalInstall,
+  i = introspectionTermInstall,
   c = crafterInstall,
   m = monitorInstall,
 }

@@ -5,6 +5,11 @@ local wirelessMode = not turtle
 local turtleMode = turtle
 local inventory, invPeripheral, importStart, importEnd, pollFrequency, exportStart, exportEnd, player
 
+local mainFg = colors.white
+local mainBg = colors.black
+
+local selectBg, selectFg, menuFg, menuBg, headerFg, headerBg, searchFg, searchBg, listBg, listFg, errFg, tabFg, tabBg
+
 local function refreshTurtleInventory()
     local turtleInventory = {}
     local f = {}
@@ -16,6 +21,8 @@ local function refreshTurtleInventory()
     parallel.waitForAll(table.unpack(f))
     return turtleInventory
 end
+
+local themes = { "default", "amber", "green", "aqua", "graphite", "hotdogstand", "turtle" }
 
 local function firstTimeSetup()
     settings.define("misc.turtle", { description = "Should this terminal be in turtle mode?", type = "boolean" })
@@ -65,10 +72,17 @@ local function firstTimeSetup()
     settings.save()
 end
 
+local themeInfo = "The theme to use. Available themes : "
+for _, v in pairs(themes) do
+    themeInfo = themeInfo .. " " .. v
+end
+settings.define("misc.theme", { description = themeInfo, type = "string", default = "default" })
+
 settings.load()
 if settings.get("misc.turtle") == nil then
     firstTimeSetup()
 end
+
 
 turtleMode = settings.get("misc.turtle")
 wirelessMode = settings.get("misc.wireless")
@@ -105,7 +119,7 @@ if not turtleMode then
         local size = invPeripheral.size()
         importStart = settings.get("misc.importStart") or 1
         importEnd = settings.get("misc.importEnd") or math.floor(size / 2)
-        exportStart = settings.get("misc.exportStart") or importStart + 1
+        exportStart = settings.get("misc.exportStart") or importEnd + 1
         exportEnd = settings.get("misc.exportEnd") or size
     end
     pollFrequency = 3
@@ -146,12 +160,135 @@ end
 local SEARCH, CRAFT, INFO, REQUEST, SYSINFO
 
 local display = window.create(term.current(), 1, 1, term.getSize())
+term.redirect(display)
 local mode = ""
 local modes = { "SEARCH", "CRAFT", "CONFIG", "SYSINFO" }
 local modeLookup
 local w, h = display.getSize()
 local itemCountW = 5
 local itemNameW = w - itemCountW
+
+local function resetPalette(dev)
+    dev = dev or display
+    for i = 0, 15 do
+        dev.setPaletteColor(2 ^ i, term.nativePaletteColor(2 ^ i))
+    end
+end
+
+-- theme setup
+local function themeSetup(dev)
+    dev = dev or display
+    resetPalette(dev)
+    mainFg = colors.white
+    mainBg = colors.black
+    selectBg, selectFg, menuFg, menuBg, headerFg, headerBg, searchFg, searchBg, listBg, listFg, errFg, tabFg, tabBg = nil,
+        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil
+    local theme = settings.get("misc.theme")
+    if theme == "amber" then
+        mainFg = colors.orange
+        dev.setPaletteColor(colors.orange, 0xFFCC00)
+    elseif theme == "green" then
+        mainFg = colors.green
+        dev.setPaletteColor(colors.green, 0x33FF00)
+    elseif theme == "aqua" then
+        mainBg = colors.white
+        mainFg = colors.black
+        menuBg = colors.lightGray
+        menuFg = colors.black
+        tabBg = colors.blue
+        tabFg = colors.white
+        selectBg = colors.blue
+        selectFg = colors.white
+        headerBg = colors.gray
+        listBg = colors.cyan
+        dev.setPaletteColor(colors.blue, 0x4588cb)
+        dev.setPaletteColor(colors.white, 0xffffff)
+        dev.setPaletteColor(colors.black, 0x0f0f0f)
+        dev.setPaletteColor(colors.gray, 0xb9b9b9)
+        dev.setPaletteColor(colors.lightGray, 0xe7e7e7)
+        dev.setPaletteColor(colors.cyan, 0xdee4e9) -- blue tinted gray
+    elseif theme == "graphite" then
+        mainBg = colors.white
+        mainFg = colors.black
+        menuBg = colors.lightGray
+        menuFg = colors.black
+        tabBg = colors.blue
+        tabFg = colors.white
+        selectBg = colors.blue
+        selectFg = colors.white
+        headerBg = colors.gray
+        listBg = colors.cyan
+        dev.setPaletteColor(colors.blue, 0x556077) -- desaturated blue
+        dev.setPaletteColor(colors.white, 0xffffff)
+        dev.setPaletteColor(colors.black, 0x0f0f0f)
+        dev.setPaletteColor(colors.gray, 0xbebebe)
+        dev.setPaletteColor(colors.lightGray, 0xe7e7e7)
+        dev.setPaletteColor(colors.cyan, 0xe1e5ee) -- blue tinted gray
+    elseif theme == "hotdogstand" then
+        mainBg = colors.red
+        mainFg = colors.white
+        tabBg = colors.black
+        tabFg = colors.white
+        menuFg = colors.white
+        menuBg = colors.red
+        headerBg = colors.white
+        headerFg = colors.black
+        searchBg = colors.white
+        searchFg = colors.black
+        listBg = colors.yellow
+        listFg = colors.black
+        selectBg = colors.black
+        selectFg = colors.white
+        dev.setPaletteColor(colors.yellow, 0xffff00)
+        dev.setPaletteColor(colors.red, 0xff0000)
+        dev.setPaletteColor(colors.white, 0xffffff)
+        dev.setPaletteColor(colors.black, 0x000000)
+    elseif theme == "turtle" then
+        mainFg = colors.white
+        mainBg = colors.gray
+        menuBg = colors.yellow
+        menuFg = colors.white
+        tabBg = colors.black
+        tabFg = colors.white
+        headerBg = colors.yellow
+        selectBg = colors.black
+        selectFg = colors.white
+
+        dev.setPaletteColor(colors.gray, 0xCEB15F)   -- turtle slot color
+        dev.setPaletteColor(colors.yellow, 0xdba519) -- turtle yellow
+        dev.setPaletteColor(colors.white, 0xfcfcfc)  -- off white
+        dev.setPaletteColor(colors.black, 0x1c0a11)  -- off black
+    end
+
+    -- selected item in lists
+    selectBg = selectBg or mainFg
+    selectFg = selectFg or mainBg
+
+    -- top menu bar
+    menuFg = menuFg or mainBg
+    menuBg = menuBg or mainFg
+
+    -- selected tab
+    tabFg = tabFg or menuBg
+    tabBg = tabBg or menuFg
+
+    -- page headers
+    headerFg = headerFg or mainFg
+    headerBg = headerBg or mainBg
+
+    -- search bars
+    searchFg = searchFg or mainFg
+    searchBg = searchBg or mainBg
+
+    -- lists
+    listFg = listFg or mainFg
+    listBg = listBg or mainBg
+
+    -- failure indicating color
+    errFg = errFg or colors.red
+end
+themeSetup()
+
 local function formatItem(name, count)
     return ("%-" .. itemCountW .. "s %-" .. itemNameW .. "s"):format(count, name)
 end
@@ -160,7 +297,11 @@ local function setColors(fg, bg, device)
     device.setTextColor(fg)
     device.setBackgroundColor(bg)
 end
-
+local function clearLine(y, device)
+    device = device or display
+    device.setCursorPos(1, y)
+    device.clearLine()
+end
 local function text(x, y, t, device)
     device = device or display
     device.setCursorPos(math.floor(x), math.floor(y))
@@ -212,20 +353,30 @@ end
 ---@param header string
 ---@param dataFormatter fun(item: any): string
 local function drawSearch(filter, selected, list, header, dataFormatter)
+    setColors(searchFg, searchBg)
+    clearLine(2)
     text(1, 2, filter)
+    setColors(headerFg, headerBg)
+    clearLine(3)
     text(1, 3, header)
+    setColors(listFg, listBg)
+    for y = 4, h do
+        clearLine(y)
+    end
     local screenScroll = getFirstItemOnScreen(selected, list)
     for i = screenScroll, getLastItemOnScreen(screenScroll, list) do
         local item = list[i]
         local y = getYWithScroll(screenScroll, i)
         if y > 3 then
             if i == selected then
-                setColors(colors.black, colors.white)
+                setColors(selectFg, selectBg)
             end
+            clearLine(y)
             text(1, y, dataFormatter(item))
-            setColors(colors.white, colors.black)
+            setColors(listFg, listBg)
         end
     end
+    setColors(mainFg, mainBg)
     display.setCursorBlink(true)
     display.setCursorPos(filter:len() + 1, 2)
 end
@@ -234,24 +385,25 @@ end
 local function draw(drawFunc, ...)
     display.setVisible(false)
     display.setCursorBlink(false)
+    setColors(mainFg, mainBg)
     display.clear()
-    setColors(colors.black, colors.white)
+    setColors(menuFg, menuBg)
     display.setCursorPos(1, 1)
     display.clearLine()
     if modeLookup[mode] then
         for k, v in ipairs(modes) do
             if v == mode then
-                setColors(colors.white, colors.black)
+                setColors(tabFg, tabBg)
             end
             display.write(" " .. v .. " ")
-            setColors(colors.black, colors.white)
+            setColors(menuFg, menuBg)
         end
     else
         local w, _ = display.getSize()
         display.setCursorPos((w - #mode) / 2, 1)
         display.write(mode)
     end
-    setColors(colors.white, colors.black)
+    setColors(mainFg, mainBg)
     drawFunc(...)
     display.setVisible(true)
 end
@@ -301,6 +453,26 @@ local function isEnter(key)
     return key == keys.enter or key == keys.numPadEnter
 end
 
+
+local function cycleTheme()
+    local current = settings.get("misc.theme")
+    local next
+    for i, theme in ipairs(themes) do
+        if theme == current then
+            next = i + 1
+            break
+        end
+    end
+    if next then
+        if next > #themes then
+            next = 1
+        end
+        settings.set("misc.theme", themes[next])
+        settings.save()
+        themeSetup()
+    end
+end
+
 ---Handle creating and drawing a searchable menu
 ---@param drawer fun(filter: string, selected: integer, sifted: any[])
 ---@param listProvider fun(): any[]
@@ -345,6 +517,8 @@ local function searchableMenu(drawer, listProvider, onSelect, event, sort, match
                 filter = ""
                 sifted = filterList(listProvider(), filter, sort, match)
                 selected = math.min(selected, #sifted)
+            elseif controlHeld and key == keys.c then
+                cycleTheme()
             elseif key == keys.leftCtrl then
                 controlHeld = true
             end
@@ -416,7 +590,7 @@ function CRAFT()
         return REQUEST(selected)
     end
 
-    return searchableMenu(drawer, function() return craftables end, onSelect, nil, nil, nil, SEARCH)
+    return searchableMenu(drawer, function() return craftables end, onSelect, nil, nil, nil, CONFIG)
 end
 
 function INFO(item)
@@ -424,7 +598,10 @@ function INFO(item)
     local itemAmount = tostring(math.min(item.maxCount, item.count))
     while true do
         draw(function()
+            setColors(headerFg, headerBg)
+            clearLine(2)
             text(1, 2, ("%u x %s"):format(item.count, item.displayName))
+            setColors(mainFg, mainBg)
             text(1, 3, item.name)
             text(1, 4, item.nbt)
             if item.enchantments then
@@ -460,11 +637,12 @@ function REQUEST(item)
     if not item then
         return CRAFT()
     end
-    display.clear()
-    text(1, 1, "Requesting Item")
     while true do
         draw(function()
+            setColors(headerFg, headerBg)
+            clearLine(2)
             text(1, 2, item)
+            setColors(mainFg, mainBg)
             text(1, 3, "Quantity? ")
             display.setCursorPos(1, 3)
             display.clearLine()
@@ -482,6 +660,8 @@ function REQUEST(item)
 
     local oldTerm = term.current()
     local viewTerm = window.create(oldTerm, 1, 5, term.getSize())
+    setColors(mainFg, mainBg, viewTerm)
+    viewTerm.clear()
     local height = 5
     for _ in pairs(craftInfo.missing) do height = height + 1 end
     local hasUse = false
@@ -490,20 +670,25 @@ function REQUEST(item)
     end
     for _ in pairs(craftInfo.toCraft) do height = height + 1 end
     local win = window.create(viewTerm, 1, 1, term.getSize(), height)
+    setColors(mainFg, mainBg, win)
+    win.clear()
     local line = 1
     draw(function()
+        setColors(headerFg, headerBg)
+        clearLine(2)
         text(1, 2, (craftInfo.success and "Press y to craft, n to cancel") or "Press n to cancel the craft")
+        setColors(mainFg, mainBg)
         text(1, 3, ("Requested %s"):format(item))
         text(1, 4, (craftInfo.success and "Success") or "Failure")
         if not craftInfo.success then
-            setColors(colors.red, colors.black, win)
+            setColors(errFg, mainBg, win)
             text(1, line, "Missing:", win)
             line = line + 1
             for k, v in pairs(craftInfo.missing) do
                 text(1, line, ("%ux%s"):format(v, k), win)
                 line = line + 1
             end
-            setColors(colors.white, colors.black, win)
+            setColors(mainFg, mainBg, win)
         end
         if hasUse then
             text(1, line, "To use:", win)
@@ -591,6 +776,7 @@ end
 ---@param t table
 ---@param onChange fun(selected: tableStructure)
 local function tableExplorer(dev, t, onChange)
+    setColors(listFg, listBg, dev)
     local selected = 1
     ---@alias tableStructure {parent: table, parentStructure: table?, key: any, value: any, level: integer, type: string, last: boolean}
     ---@type tableStructure[]
@@ -644,6 +830,7 @@ local function tableExplorer(dev, t, onChange)
             onChange(tableStructure[selected])
         end,
         draw = function()
+            setColors(listFg, listBg, dev)
             dev.clear()
             local w, h = dev.getSize()
             local firstElement = math.min(math.max(selected - math.floor(h / 2), 1), #tableStructure - h + 1)
@@ -651,16 +838,14 @@ local function tableExplorer(dev, t, onChange)
                 local item = tableStructure[y + firstElement - 1]
                 if item then
                     if firstElement + y - 1 == selected then
-                        dev.setBackgroundColor(colors.white)
-                        dev.setTextColor(colors.black)
+                        setColors(selectFg, selectBg, dev)
                     end
-                    dev.setCursorPos(1, y)
-                    dev.clearLine()
-                    dev.write(getConfigListString(item))
-                    dev.setBackgroundColor(colors.black)
-                    dev.setTextColor(colors.white)
+                    clearLine(y, dev)
+                    text(1, y, getConfigListString(item), dev)
+                    setColors(listFg, listBg, dev)
                 end
             end
+            setColors(mainBg, mainFg, dev)
         end
     }
 end
@@ -671,10 +856,10 @@ local function handleEditEvents(ctrlHeld, e, tab, selected, parent)
             ctrlHeld = true
         end
         if ctrlHeld then
-            if e[2] == keys.k then
+            if selected and e[2] == keys.k then
                 -- change key
-                display.setCursorPos(1, h)
-                display.clearLine()
+                setColors(mainFg, mainBg)
+                clearLine(h)
                 display.write("Enter new key: ")
                 local nk = read()
                 if nk ~= "" then
@@ -686,41 +871,28 @@ local function handleEditEvents(ctrlHeld, e, tab, selected, parent)
                     tab.update()
                 end
                 ctrlHeld = false
-            elseif selected and e[2] == keys.t then
-                -- change type
-                display.setCursorPos(1, h)
-                display.clearLine()
-                display.write("Enter new type: ")
-                local nt = read()
-                if nt ~= "" then
-                    if nt == "table" then
-                        parent[selected.key] = {}
-                        tab.update()
-                    elseif nt == "number" then
-                        parent[selected.key] = 0
-                        tab.update()
-                    elseif nt == "string" then
-                        parent[selected.key] = ""
-                        tab.update()
-                    elseif nt == "boolean" then
-                        parent[selected.key] = false
-                        tab.update()
-                    end
-                end
-                ctrlHeld = false
-            elseif selected and e[2] == keys.g and selected.type ~= "table" then
+            elseif selected and e[2] == keys.g then
                 -- change value
-                display.setCursorPos(1, h)
-                display.clearLine()
+                setColors(mainFg, mainBg)
+                clearLine(h)
                 display.write("Enter new value: ")
                 local v = read()
                 if v ~= "" then
-                    if selected.type == "number" and tonumber(v) then
+                    if tonumber(v) then
+                        selected.type = "number"
                         parent[selected.key] = tonumber(v)
-                    elseif selected.type == "string" then
-                        parent[selected.key] = v
-                    elseif selected.type == "boolean" and v == "true" or v == "false" then
+                    elseif v == "true" or v == "false" then
+                        selected.type = "boolean"
                         parent[selected.key] = v == "true"
+                    else
+                        local ok, result = pcall(textutils.unserialise, v)
+                        if ok and type(result) == "table" then
+                            selected.type = "table"
+                            parent[selected.key] = result
+                        else
+                            selected.type = "string"
+                            parent[selected.key] = v
+                        end
                     end
                     tab.update()
                 end
@@ -752,7 +924,7 @@ local function handleEditEvents(ctrlHeld, e, tab, selected, parent)
 end
 
 local function editTable(splitDesc, setting)
-    local mid = 7 + #splitDesc
+    local mid = 5 + #splitDesc
     local win = window.create(display, 1, mid, w, h - mid)
     ---@type tableStructure
     local selected
@@ -763,22 +935,41 @@ local function editTable(splitDesc, setting)
     local fstring = "%-9s%s"
     while true do
         draw(function()
-            setColors(colors.white, colors.black)
+            setColors(mainFg, mainBg)
             local y = 2
-            text(1, y, setting.location)
+            local revPath = {}
+            local node = selected
+            while node do
+                revPath[#revPath + 1] = node.key
+                node = node.parentStructure
+            end
+            local path = setting.location
+            for i = #revPath, 1, -1 do
+                if type(revPath[i]) == "number" then
+                    path = path .. "[" .. revPath[i] .. "]"
+                else
+                    path = path .. "." .. revPath[i]
+                end
+            end
+            setColors(headerFg, headerBg)
+            clearLine(y)
+            text(1, y, path)
+            setColors(mainFg, mainBg)
             y = y + 1
             for _, v in ipairs(splitDesc) do
                 text(1, y, v)
                 y = y + 1
             end
             local hw = math.floor(w / 2)
-            text(1, y, fstring:format("key ^k", selected and selected.key))
+            text(2, y, fstring:format("key ^k", selected and selected.key))
             y = y + 1
-            text(1, y, fstring:format("type ^t", selected and selected.type))
-            y = y + 1
-            if selected and selected.type ~= "table" then
-                text(1, y, fstring:format("value ^g", selected and selected.value))
+            local valStr = selected and selected.value
+            if selected and selected.type == "table" then
+                valStr = "{}"
+            elseif not selected then
+                valStr = "nil"
             end
+            text(2, y, fstring:format("value ^g", valStr))
             y = y + 1
             text(1, h, "Cancel ^c")
             local nstring = "New ^n/^r"
@@ -811,8 +1002,9 @@ function EDIT(setting)
     while true do
         local y = 2
         draw(function()
-            setColors(colors.white, colors.black)
+            setColors(headerFg, headerBg)
             text(1, y, setting.location)
+            setColors(mainFg, mainBg)
             y = y + 1
             for _, v in ipairs(splitDesc) do
                 text(1, y, v)
@@ -881,7 +1073,7 @@ function CONFIG()
         return EDIT(setting)
     end
 
-    return searchableMenu(drawer, function() return configList end, onSelect, nil, sort, match, nil)
+    return searchableMenu(drawer, function() return configList end, onSelect, nil, sort, match, SYSINFO)
 end
 
 function SYSINFO()
@@ -891,7 +1083,10 @@ function SYSINFO()
         local usage = lib.getUsage()
         local status = lib.getCraftStatus()
         draw(function()
+            setColors(headerFg, headerBg)
+            clearLine(2)
             text(1, 2, "System Info")
+            setColors(mainFg, mainBg)
             text(1, 3, ("%u Used / %u Total (%u Free)"):format(usage.used, usage.total, usage.free))
             text(1, 4, ("Crafting jobs active: %u"):format(status.jobs))
             text(1, 5, ("Crafting tasks active: %u"):format(status.tasks))
@@ -904,6 +1099,8 @@ function SYSINFO()
             end
         elseif e[1] == "timer" and e[2] == timer then
             timer = os.startTimer(1)
+        elseif e[1] == "key" and e[2] == keys.tab then
+            return SEARCH()
         end
     end
 end
