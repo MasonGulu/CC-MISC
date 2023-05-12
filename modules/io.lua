@@ -113,7 +113,7 @@ return {
         end
       end
 
-      local remaining = loaded.inventory.interface.getCount(rule.name, rule.nbt) - rule.min
+      local remaining = rule.min and loaded.inventory.interface.getCount(rule.name, rule.nbt) - rule.min
       for _, slot in ipairs(slots) do
         if remaining then
           if remaining < 1 then
