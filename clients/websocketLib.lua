@@ -103,12 +103,11 @@ function lib.callIntrospection(player, method, ...)
             end
         end
     end
-
 end
 
 ---Connect to the storage system
 function lib.connect(url)
-    name = "client_"..os.epoch("utc")
+    name = "client_" .. os.epoch("utc")
     ws = assert(http.websocket(url))
 end
 
@@ -120,8 +119,8 @@ end
 ---@param toSlot nil|number
 ---@param nbt nil|string
 ---@param options nil|TransferOptions
-function lib.pullItems(async,player, fromSlot, amount, toSlot, nbt, options)
-  return interface("pullItems",async,player, fromSlot, amount, toSlot, nbt, options)
+function lib.pullItems(async, player, fromSlot, amount, toSlot, nbt, options)
+    return interface("pullItems", async, player, fromSlot, amount, toSlot, nbt, options)
 end
 
 ---Push items to an inventory
@@ -132,17 +131,17 @@ end
 ---@param toSlot nil|number
 ---@param nbt nil|string
 ---@param options nil|TransferOptions
-function lib.pushItems(async,player, name, amount, toSlot, nbt, options)
-  return interface("pushItems",async,player, name, amount, toSlot, nbt, options)
+function lib.pushItems(async, player, name, amount, toSlot, nbt, options)
+    return interface("pushItems", async, player, name, amount, toSlot, nbt, options)
 end
 
 ---List inventory contents
 function lib.list()
-  return interface("list")
+    return interface("list")
 end
 
-function lib.requestCraft(name,count)
-  return interface("requestCraft",name,count)
+function lib.requestCraft(name, count)
+    return interface("requestCraft", name, count)
 end
 
 ---Subscribe to transfers
@@ -157,31 +156,38 @@ function lib.subscribe()
 end
 
 function lib.performTransfer()
-  return interface("performTransfer")
+    return interface("performTransfer")
 end
 
 function lib.listCraftables()
-  return interface("listCraftables")
+    return interface("listCraftables")
 end
 
 function lib.startCraft(jobID)
-  return interface("startCraft",jobID)
+    return interface("startCraft", jobID)
 end
 
 function lib.cancelCraft(jobID)
-  return interface("cancelCraft",jobID)
+    return interface("cancelCraft", jobID)
 end
 
-function lib.addGridRecipe(name,produces,recipe,shaped)
-  return interface("addGridRecipe", name, produces, recipe, shaped)
+function lib.addGridRecipe(name, produces, recipe, shaped)
+    return interface("addGridRecipe", name, produces, recipe, shaped)
 end
 
 function lib.getUsage()
-  return interface("getUsage")
+    return interface("getUsage")
 end
 
 function lib.removeGridRecipe(name)
-  return interface("removeGridRecipe", name)
+    return interface("removeGridRecipe", name)
 end
 
-return lib
+---@type genericinterface
+return setmetatable(lib, {
+    __index = function(t, k)
+        return function(...)
+            return interface(k, ...)
+        end
+    end
+})

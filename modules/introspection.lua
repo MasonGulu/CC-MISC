@@ -1,10 +1,22 @@
 -- Sever library for interacting with clients using https://github.com/SkyTheCodeMaster/cc-websocket-bridge
 
+local function deepCloneNoFunc(t)
+  local nt = {}
+  for k, v in pairs(t) do
+    if type(v) == "table" then
+      nt[k] = deepCloneNoFunc(v)
+    elseif type(v) ~= "function" then
+      nt[k] = v
+    end
+  end
+  return nt
+end
+
 ---@class modules.introspection
 ---@field interface modules.introspection.interface
 return {
   id = "introspection",
-  version = "1.0.0",
+  version = "1.0.1",
   config = {
     url = {
       type = "string",
@@ -21,16 +33,16 @@ return {
   },
   init = function(loaded, config)
     local introspection = {}
-    for k, v in pairs(config.websocket.introspection.value) do
+    for k, v in pairs(config.introspection.introspection.value) do
       introspection[k] = peripheral.call(v, "getInventory")
     end
 
     local interface = {}
-    local ws = assert(http.websocket(config.websocket.url.value)) --[[@as Websocket]]
+    local ws = assert(http.websocket(config.introspection.url.value)) --[[@as Websocket]]
 
     local function handleUpdate(list)
       ws.send(textutils.serialise {
-        list = list,
+        list = deepCloneNoFunc(list),
         protocol = "storage_system_update",
         destination = "*",
         source = "HOST",
@@ -72,7 +84,7 @@ return {
     local function handleMessage(event)
       local message = event.message
       if message.method == "pushItems" or message.method == "pullItems" then
-        local periphName = config.websocket.introspection.value[message.args[2]]
+        local periphName = config.introspection.introspection.value[message.args[2]]
         local periph = peripheral.wrap(periphName or message.args[2])
         if periphName and periph and periph.getInventory then
           message.args[2] = periph.getInventory()
@@ -81,7 +93,7 @@ return {
           message.args.n = 7
         end
       end
-      local response = table.pack(loaded.interface.interface.callMethod(message.method, message.args))
+      local response = deepCloneNoFunc(table.pack(loaded.interface.interface.callMethod(message.method, message.args)))
       ws.send(textutils.serialise {
         destination = message.source,
         protocol = "storage_system_websocket",
@@ -94,14 +106,24 @@ return {
     local function callIntrospection(event)
       local message = event.message
       local periph = introspection[message.player]
-      local response = table.pack(periph[message.method](table.unpack(message.args, 1, message.args.n)))
-      ws.send(textutils.serialise {
-        destination = message.source,
-        protocol = "call_introspection",
-        response = response,
-        method = message.method,
-        source = "HOST"
-      })
+      if periph then
+        local response = deepCloneNoFunc(table.pack(periph[message.method](table.unpack(message.args, 1, message.args.n))))
+        ws.send(textutils.serialise {
+          destination = message.source,
+          protocol = "call_introspection",
+          response = response,
+          method = message.method,
+          source = "HOST"
+        })
+      else
+        ws.send(textutils.serialise {
+          destination = message.source,
+          protocol = "call_introspection",
+          response = "ACCESS DENIED",
+          method = message.method,
+          source = "HOST",
+        })
+      end
     end
 
     interface.start = function()
@@ -112,7 +134,7 @@ return {
         if message.protocol == "storage_system_websocket" and message.method and message.args then
           handleMessage(event)
         elseif message.protocol == "call_introspection" and message.method and message.args and message.player
-            and config.websocket.introspection.value[message.player] then
+            and config.introspection.introspection.value[message.player] then
           callIntrospection(event)
         end
       end
