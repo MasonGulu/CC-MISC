@@ -473,6 +473,7 @@ local function cycleTheme()
     end
 end
 
+local filter = ""
 ---Handle creating and drawing a searchable menu
 ---@param drawer fun(filter: string, selected: integer, sifted: any[])
 ---@param listProvider fun(): any[]
@@ -482,7 +483,6 @@ end
 ---@param match nil|fun(val: any, pattern: string): boolean
 ---@param tab function? mode to switch to upon pushing tab
 local function searchableMenu(drawer, listProvider, onSelect, event, sort, match, tab)
-    local filter = ""
     local sifted = filterList(listProvider(), filter, sort, match)
     local selected = 1
     local controlHeld = false
