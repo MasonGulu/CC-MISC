@@ -47,6 +47,15 @@ local introspectionInstall = {
   }
 }
 
+local chatboxInstall = {
+  name = "Chatbox Module",
+  files = {
+    modules = {
+      ["chatbox.lua"] = fromRepository "modules/chatbox.lua"
+    }
+  }
+}
+
 local baseInstall = {
   name = "Base MISC",
   files = {
@@ -77,6 +86,7 @@ local serverInstallOptions = {
   i = introspectionInstall,
   l = logInstall,
   o = ioInstall,
+  r = chatboxInstall,
 }
 
 local terminalInstall = {

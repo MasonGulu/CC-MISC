@@ -42,6 +42,8 @@ local function firstTimeSetup()
         description = "Inventory to use when not wireless, and not a turtle",
         type = "string"
     })
+    settings.define("misc.dropOnExport",
+        { description = "If this turtle should drop items on export.", type = "boolean" })
 
     settings.set("misc.turtle", not not (turtle))
     if settings.get("misc.turtle") then
@@ -131,6 +133,14 @@ local function eventTurtleInventory()
         for i = importStart, importEnd do
             if turtle.getItemDetail(i) then
                 lib.pullItems(true, inventory, i, nil, nil, nil, { optimal = false })
+            end
+        end
+        if settings.get("misc.dropOnExport") then
+            for i = exportStart, exportEnd do
+                if turtle.getItemDetail(i) then
+                    turtle.select(i)
+                    turtle.drop()
+                end
             end
         end
         lib.performTransfer()
@@ -422,6 +432,31 @@ local function handleClicks(x, y)
     end
 end
 
+local function doTransfers(item, target)
+    local moved = true
+    local firstTry = true
+    while moved and target > 0 do
+        if firstTry then
+            firstTry = false
+        else
+            sleep(1)
+        end
+        moved = false
+        local listing = (wirelessMode and lib.callIntrospection(player, "list")) or invPeripheral.list()
+        for i = exportStart, exportEnd do
+            if not listing[i] then
+                lib.pushItems(true, inventory, item.name, target, i, item.nbt, { optimal = false })
+                target = target - item.maxCount
+                moved = true
+                if target <= 0 then
+                    break
+                end
+            end
+        end
+    end
+    return target
+end
+
 ---Request an item
 ---@param requestingCraft boolean
 ---@param item string
@@ -436,16 +471,7 @@ local function requestItem(requestingCraft, item, amount)
         return
     end
     amount = math.min(amount, item.count)
-    local listing = (wirelessMode and lib.callIntrospection(player, "list")) or invPeripheral.list()
-    for i = exportStart, exportEnd do
-        if not listing[i] then
-            lib.pushItems(true, inventory, item.name, amount, i, item.nbt, { optimal = false })
-            amount = amount - item.maxCount
-            if amount <= 0 then
-                break
-            end
-        end
-    end
+    doTransfers(item, amount)
     lib.performTransfer()
 end
 
@@ -1107,8 +1133,12 @@ end
 
 modeLookup = { SEARCH = SEARCH, CRAFT = CRAFT, CONFIG = CONFIG, SYSINFO = SYSINFO }
 
+local funcs = { lib.subscribe, SEARCH }
+
 if turtleMode then
-    parallel.waitForAny(lib.subscribe, eventTurtleInventory, SEARCH)
+    funcs[#funcs + 1] = eventTurtleInventory
 else
-    parallel.waitForAny(lib.subscribe, inventoryPoll, SEARCH)
+    funcs[#funcs + 1] = inventoryPoll
 end
+
+parallel.waitForAny(table.unpack(funcs))

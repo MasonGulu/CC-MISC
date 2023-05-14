@@ -244,7 +244,7 @@ return {
 
     ---Push items to an inventory
     ---@param async boolean|nil
-    ---@param targetInventory string|AbstractInventory
+    ---@param targetInventory string|AbstractInventory|Inventory
     ---@param name string|number
     ---@param amount nil|number
     ---@param toSlot nil|number
@@ -261,7 +261,7 @@ return {
 
     ---Pull items from an inventory
     ---@param async boolean|nil
-    ---@param fromInventory string|AbstractInventory
+    ---@param fromInventory string|AbstractInventory|Inventory
     ---@param fromSlot string|number
     ---@param amount nil|number
     ---@param toSlot nil|number
