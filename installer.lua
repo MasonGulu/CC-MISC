@@ -13,7 +13,7 @@ local function fromRepository(url)
 end
 
 local craftInstall = {
-  name = "Install all crafting modules",
+  name = "Crafting Modules",
   files = {
     ["bfile.lua"] = fromRepository "bfile.lua",
     modules = {
@@ -30,7 +30,7 @@ local craftInstall = {
 }
 
 local logInstall = {
-  name = "Install a logger",
+  name = "Logging Module",
   files = {
     modules = {
       ["logger.lua"] = fromRepository "modules/logger.lua"
@@ -39,17 +39,16 @@ local logInstall = {
 }
 
 local introspectionInstall = {
-  name = "Install the modules necessary for use with the introspection module",
+  name = "Introspection Module",
   files = {
     modules = {
-      ["introspection.lua"] = fromRepository "modules/introspection.lua",
-      ["interface.lua"] = fromRepository "modules/interface.lua"
+      ["introspection.lua"] = fromRepository "modules/introspection.lua"
     }
   }
 }
 
 local baseInstall = {
-  name = "Install base MISC and basic modem modules.",
+  name = "Base MISC",
   files = {
     ["startup.lua"] = fromRepository "storage.lua",
     ["abstractInvLib.lua"] = fromURL "https://gist.githubusercontent.com/MasonGulu/57ef0f52a93304a17a9eaea21f431de6/raw/07c3322a5fa0d628e558e19017295728e4ee2e8d/abstractInvLib.lua", -- TODO change this
@@ -63,7 +62,7 @@ local baseInstall = {
 }
 
 local ioInstall = {
-  name = "Install the generic i/o module",
+  name = "Generic I/O Module",
   files = {
     modules = {
       ["io.lua"] = fromRepository "modules/io.lua"
@@ -81,7 +80,7 @@ local serverInstallOptions = {
 }
 
 local terminalInstall = {
-  name = "Install a basic item access terminal",
+  name = "Access Terminal",
   files = {
     ["startup.lua"] = fromRepository "clients/terminal.lua",
     ["modemLib.lua"] = fromRepository "clients/modemLib.lua"
@@ -89,7 +88,7 @@ local terminalInstall = {
 }
 
 local introspectionTermInstall = {
-  name = "Install a basic item access terminal for introspection module use",
+  name = "Access Terminal (Introspection)",
   files = {
     ["startup.lua"] = fromRepository "clients/terminal.lua",
     ["websocketLib.lua"] = fromRepository "clients/websocketLib.lua"
@@ -97,14 +96,14 @@ local introspectionTermInstall = {
 }
 
 local crafterInstall = {
-  name = "Install an autocrafting terminal on a crafty turtle",
+  name = "Crafter Turtle",
   files = {
     ["startup.lua"] = fromRepository "clients/crafter.lua"
   }
 }
 
 local monitorInstall = {
-  name = "Install a basic usage monitor",
+  name = "Usage Monitor",
   files = {
     ["startup.lua"] = fromRepository "clients/usageMonitor.lua",
     ["modemLib.lua"] = fromRepository "clients/modemLib.lua"

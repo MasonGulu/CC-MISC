@@ -109,6 +109,7 @@ return {
       if jsonTypeHandlers[json.type] then
         jsonLogger:info("Importing JSON of type %s", json.type)
         jsonTypeHandlers[json.type](json)
+        return true
       else
         jsonLogger:info("Skipping JSON of type %s, no handler available", json.type)
       end
@@ -1106,8 +1107,14 @@ return {
         for _, file in ipairs(transfer.getFiles()) do
           local contents = file.readAll()
           local json = textutils.unserialiseJSON(contents)
-          if json then
-            loadJson(json)
+          if type(json) == "table" then
+            if loadJson(json) then
+              print(("Successfully imported %s"):format(file.getName()))
+            else
+              print(("Failed to import %s, no handler for %s"):format(file.getName(), json.type))
+            end
+          else
+            print(("Failed to import %s, not a JSON file"):format(file.getName()))
           end
           file.close()
         end

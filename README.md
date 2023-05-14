@@ -20,42 +20,71 @@ A minimal MISC system consists of
 
 - A single computer running MISC
 - Any number of connected inventories
-- (Optionally) A client access terminal
+- A client access terminal
 
-To install MISC, you can simply run the installer on your server and each client you'd like to use.
+![Example minimal setup](docs/assets/min_setup.png)
 
-`wget run https://raw.githubusercontent.com/MasonGulu/CC-MISC/master/installer.lua`.
+The client can be advanced or basic, it supports both mouse and keyboard.
 
-Functionality can be extended by attaching more devices to the network, and adding appropriate modules.
-For example, grid crafting functionality can be added by adding the following modules.
+On both your server and all your clients simply run `wget run https://raw.githubusercontent.com/MasonGulu/CC-MISC/master/installer.lua`.
 
-- Crafting planner and executor `/modules/crafting.lua`
-- Grid crafting provider `/modules/grid.lua`
-  You'll need some recipes, you can start with `/recipes/*`.
+On your server select the base MISC system option.
 
-Then adding as many crafty turtles running `/clients/crafter.lua` as you'd like.
+On your client select the access terminal option.
 
-## MISC Server
+Reboot both, the server will ask for a modem, simply input the side your wired modem is attached to.
 
-To install the MISC server, you will need the following files.
+## MISC Access Terminal
 
-- The main executable, `storage.lua`
-- The modules you'd like in `/modules/`, (`/modules/inventory.lua` is required)
-  - Module load order is determined automatically based on each module's dependencies list. For more information see the general [module documentation](/docs/modules/index.md).
-- The shared library, `common.lua`
-- [`abstractInvLib.lua`](https://gist.github.com/MasonGulu/57ef0f52a93304a17a9eaea21f431de6)
+The access terminal is simple and fast to navigate. Across the top bar is a list of screens, you may click one to jump to it, or press tab to cycle between. Type to enter characters into the search bar, use `^u` (ctrl+u) to clear the search bar. Use up/down to navigate and push enter to select, or use mouse wheel and click.
 
-## MISC Terminal Client
+While on a screen with a search bar you may press `^c` to change theme.
 
-To install the MISC terminal, attach a turtle to your MISC network and install the following files. These can both be installed to the root of the drive.
+![Themes](docs/assets/themes.png)
 
-- The terminal executable `clients/terminal.lua`
-- The generic modem interface library `clients/modemLib.lua`
+### Config tab
 
-You'll also require a few additional modules on the MISC server
+Under the CONFIG tab is a list of config options for the MISC system. Selecting one will bring you to a screen with more detailed information about the setting, and the option to change it. Many settings are tables, which will bring you to a graphical table editor. This lets you navigate the table in a tree-like fasion.
 
-- Generic interface handler `/modules/interface.lua`
-- Modem interface protocol `/modules/modem.lua`
+### Config table editor
+
+Use `^k` to change the key of the selected element, `^g` to change the value (sorry I can't make it `^v`). Values you enter will be automatically converted into their respective types, tables will be unserialized.
+
+Use `^n` to add a new element at the level you are currently at. Use `^r` to make an element in the parent of the currently selected folder, this is useful for adding multiple tables in the root setting table.
+
+Push `^d` to save and exit, some settings will apply immediately, but most require a restart of the MISC server. Otherwise push `^c` to cancel and your changes will be discarded.
+
+## Adding different inventories
+
+There are 3 factors at play which determine the inventories the system will use.
+
+- `inventory.inventories`, a list of inventory peripheral names to use.
+
+- `inventory.inventoryAddPatterns`, a list of lua patterns to match against all connected peripherals, matching ones will be added.
+
+- `inventory.inventoryRemovePatterns`, any inventories that match patterns in this list will be removed from the list of inventories.
+
+To add an inventory, open your config in your client terminal and naviagate to `inventory.inventoryAddPatterns`.
+
+Select it, and add a new element to the table with `^n`, select the element you added to the table and use `^g` to change its value. This is going to a be a lua pattern, use [this site](https://gitspartv.github.io/lua-patterns/) to help you verify the pattern you choose. For example if I want to add all inventories from the mod `sc-peripherals` I would add `sc%-peripherals` to the table, keeping in mind that `-` is a special character in lua patterns so it must be escaped. Below is an example of this setting being added.
+
+![Example sc%-peripheral setting](docs/assets/sc_example.png)
+
+## Adding crafters
+
+On your server run the installer again, this time selecting crafting modules.
+
+Attach furnaces and crafty turtles to your network as desired. No additional setup is required for furnaces. For turtles simply run the client installer and choose crafter turtle.
+
+## Introspection setup
+
+Attach a Manipulator to your MISC system, then on your server run the installer and choose to install the introspection module.
+
+When you start your system it will ask for a URL, SkyCrafter0 provides `wss://ccws.skystuff.cc/connect/<channel name>/[password]`, simply swap out channel name and password as you desire. The first person to connect to a channel sets the password.
+
+Open your MISC config, find `introspection.introspection`. This is a lookup table from username to manipulator peripheral name. Add a new element to the table, set the key to your username, and set the value to the peripheral name of the manipulator attached earlier.
+
+On whatever device you choose as your remote access terminal run the installer, and choose access terminal introspection. Reboot, and select yes for wireless mode and input the URL you chose earlier. Then enter the username associated with the manipulator you would like to use.
 
 # Module Specific Documentation
 
