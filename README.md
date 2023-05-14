@@ -86,6 +86,12 @@ Open your MISC config, find `introspection.introspection`. This is a lookup tabl
 
 On whatever device you choose as your remote access terminal run the installer, and choose access terminal introspection. Reboot, and select yes for wireless mode and input the URL you chose earlier. Then enter the username associated with the manipulator you would like to use.
 
+By default the client terminal uses the center left slot of your inventory as input, and the rest of the center row as output.
+
+![Inventory layout](docs/assets/inventory_slots.png)
+
+To change this, use the `set` program. The input and output options are ranges of slots. With the input ranging between `misc.importStart` to `misc.importEnd`. The output range is then `misc.exportStart` to `misc.exportEnd`.
+
 # Module Specific Documentation
 
 Look in `/docs/` for development and module specific documentation.
