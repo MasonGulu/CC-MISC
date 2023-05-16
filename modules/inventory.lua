@@ -13,7 +13,7 @@ end
 
 return {
   id = "inventory",
-  version = "1.2.2",
+  version = "1.2.3",
   config = {
     inventories = {
       type = "table",
@@ -58,49 +58,16 @@ return {
       type = "number",
       description = "Maximum number of transfers for abstractInvLib to execute in parallel.",
       default = 100,
+    },
+    logAIL = {
+      type = "boolean",
+      description = "Enable logging for abstractInvLib.",
+      default = false
     }
   },
   dependencies = {
     logger = { min = "1.1", optional = true },
   },
-  ---@param moduleConfig table
-  setup = function(moduleConfig)
-    print("Your storage inventory list is not setup. How would you like to set that up?")
-    print("1) All inventories on the network")
-    print("2) Select Y/n on each inventory on the network")
-    print("3) Enter the list manually")
-    while true do
-      local _, char = os.pullEvent("char")
-      if char == "1" then
-        moduleConfig.inventories.value = getAttachedInventories()
-        return
-      elseif char == "2" then
-        moduleConfig.inventories.value = {}
-        for k, v in pairs(getAttachedInventories()) do
-          term.write(("%s(Y/n):"):format(v))
-          local input = io.read()
-          if input == "" then
-            input = "y"
-          end
-          if input:sub(1, 1):lower() == "y" then
-            table.insert(moduleConfig.inventories.value --[[@as table]], v)
-          end
-        end
-        return
-      elseif char == "3" then
-        while true do
-          print("Enter a table:")
-          local input = io.read()
-          local inputT = textutils.unserialise(input)
-          if inputT then
-            moduleConfig.inventories.value = inputT
-            return
-          end
-          print("Invalid table.")
-        end
-      end
-    end
-  end,
   init = function(loaded, config)
     local log = loaded.logger
     local inventories = {}
@@ -126,7 +93,17 @@ return {
       end
     end
 
-    local storage = require("abstractInvLib")(inventories)
+
+    local ailLogger = setmetatable({}, {
+      __index = function()
+        return function()
+        end
+      end
+    })
+    if log then
+      ailLogger = loaded.logger.interface.logger("inventory", "abstractInvLib")
+    end
+    local storage = require("abstractInvLib")(inventories, nil, { redirect = function(s) ailLogger:debug(s) end })
     storage.setBatchLimit(config.inventory.executeLimit.value)
     local transferQueue = {}
     local transferTimer
