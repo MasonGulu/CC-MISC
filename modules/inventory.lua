@@ -13,7 +13,7 @@ end
 
 return {
   id = "inventory",
-  version = "1.2.3",
+  version = "1.2.4",
   config = {
     inventories = {
       type = "table",
@@ -103,6 +103,7 @@ return {
     if log then
       ailLogger = loaded.logger.interface.logger("inventory", "abstractInvLib")
     end
+    ailLogger = config.inventory.logAIL.value and ailLogger
     local storage = require("abstractInvLib")(inventories, nil, { redirect = function(s) ailLogger:debug(s) end })
     storage.setBatchLimit(config.inventory.executeLimit.value)
     local transferQueue = {}
