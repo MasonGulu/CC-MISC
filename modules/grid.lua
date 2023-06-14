@@ -3,7 +3,7 @@ local common = require("common")
 ---@class modules.grid
 return {
   id = "grid",
-  version = "1.1.7",
+  version = "1.1.8",
   config = {
     port = {
       type = "number",
@@ -23,6 +23,7 @@ return {
   },
   ---@param loaded {crafting: modules.crafting, logger: modules.logger|nil}
   init = function(loaded, config)
+    local log = loaded.logger
     ---@alias RecipeEntry ItemIndex|ItemIndex[]
 
     ---@class GridRecipe
@@ -291,17 +292,50 @@ return {
       modem.transmit(config.grid.port.value, config.grid.port.value, message)
     end
 
-    local function modemMessageHandler()
+    ---@type table<thread,{filter:string?,protocol:string}>
+    local modemThreads = {}
+    local function modemReciever()
       while true do
         local modemMessage = getModemMessage(validateMessage)
         if modemMessage then
           local message = modemMessage.message
           if protocolHandlers[message.protocol] then
-            local response = protocolHandlers[message.protocol](message)
-            if response then
-              response.destination = response.destination or message.source
-              response.source = "HOST"
-              modem.transmit(config.grid.port.value, config.grid.port.value, response)
+            local thread = coroutine.create(function()
+              local response = protocolHandlers[message.protocol](message)
+              if response then
+                response.destination = response.destination or message.source
+                response.source = "HOST"
+                modem.transmit(config.grid.port.value, config.grid.port.value, response)
+              end
+            end)
+            modemThreads[thread] = { protocol = message.protocol }
+          end
+        end
+      end
+    end
+
+
+    local modemExecutorLogger = setmetatable({}, {
+      __index = function()
+        return function()
+        end
+      end
+    })
+    if log then
+      modemExecutorLogger = loaded.logger.interface.logger("grid", "modemMessageExecutor")
+    end
+    local function modemExecutor()
+      while true do
+        local e = table.pack(os.pullEvent())
+        for k, v in pairs(modemThreads) do
+          if not v.filter or e[1] == v.filter then
+            local ok, filter = coroutine.resume(k, table.unpack(e))
+            if not ok then
+              modemExecutorLogger:error("Execution of protocol %s errored: %s", v.protocol, filter)
+            end
+            v.filter = filter
+            if coroutine.status(k) == "dead" then
+              modemThreads[k] = nil
             end
           end
         end
@@ -481,7 +515,7 @@ return {
     return {
       start = function()
         loadGridRecipes()
-        parallel.waitForAny(modemMessageHandler, keepAlive)
+        parallel.waitForAny(modemReciever, keepAlive, modemExecutor)
       end,
       addGridRecipe = addGridRecipe,
       removeGridRecipe = removeGridRecipe,
