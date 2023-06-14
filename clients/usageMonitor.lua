@@ -8,6 +8,8 @@ if not settings.get("misc.monitor") then
 end
 local textScale = 0.5
 
+settings.load()
+monitorSide = settings.get("misc.monitor")
 local monitor = assert(peripheral.wrap(monitorSide), "Invalid monitor")
 
 local lib = require("modemLib")
