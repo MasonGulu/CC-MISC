@@ -6,15 +6,41 @@ if not settings.get("misc.monitor") then
   settings.set("misc.monitor", monitorSide)
   settings.save()
 end
+if settings.get("misc.wireless") == nil then
+  settings.define("misc.wireless",{ description = "Should this monitor be in wireless mode? (Use websocket)", type = "boolean"})
+  settings.define("misc.websocketURL",{ description = "URL of the websocket to use for wireless communication", type = "string" })
+  print("Should this operate in wireless mode?")
+  print("Wireless mode would be for connecting without a modem.")
+  print("Otherwise, you will need to connect to a modem on the MISC network.")
+  print("y/n? ")
+  local choice
+  while choice ~= 'y' and choice ~= 'n' do
+      choice = read()
+  end
+  wirelessMode = choice == 'y'
+  settings.set("misc.wireless", wirelessMode)
+  if wirelessMode then
+      print("Enter the URL of the websocket relay service you would like to use.")
+      settings.set("misc.websocketURL", read())
+  end
+  settings.save()
+end
 local textScale = 0.5
 
 settings.load()
 monitorSide = settings.get("misc.monitor")
 local monitor = assert(peripheral.wrap(monitorSide), "Invalid monitor")
 
-local lib = require("modemLib")
-local modem = peripheral.getName(peripheral.find("modem"))
-lib.connect(modem)
+local lib
+if not settings.get("misc.wireless")
+  lib = require("modemLib")
+  local modem = peripheral.getName(peripheral.find("modem"))
+  lib.connect(modem)
+else
+  lib = require("websocketLib")
+  local websocket = settings.get("misc.websocketURL")
+  lib.connect(websocket)
+end
 
 local labelFG = colors.black
 local labelBG = colors.white
