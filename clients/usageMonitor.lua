@@ -20,7 +20,7 @@ monitorSide = settings.get("misc.monitor")
 local monitor = assert(peripheral.wrap(monitorSide), "Invalid monitor")
 
 local lib
-if not settings.get("misc.wireless")
+if not wirelessMode then
   lib = require("modemLib")
   local modem = peripheral.getName(peripheral.find("modem"))
   lib.connect(modem)
